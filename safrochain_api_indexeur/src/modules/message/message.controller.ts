@@ -5,7 +5,9 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  UseInterceptors,
 } from "@nestjs/common";
+import { CacheInterceptor, CacheTTL } from "@nestjs/cache-manager";
 import {
   ApiTags,
   ApiOperation,
@@ -20,7 +22,10 @@ import {
   MessageTypeInfoDto,
   MessageStatisticsDto,
 } from "../../dto/message.dto";
-import { PaginatedResponseDto } from "../../common/dto/pagination.dto";
+import {
+  PaginatedResponseDto,
+  PaginationDto,
+} from "../../common/dto/pagination.dto";
 import { DateFilterService } from "../../common/services/date-filter.service";
 
 @ApiTags("Message")
@@ -52,7 +57,7 @@ export class MessageController {
   @ApiQuery({
     name: "type",
     description: "Filter by message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
     required: false,
   })
   @ApiQuery({
@@ -70,15 +75,15 @@ export class MessageController {
   @ApiQuery({
     name: "address",
     description: "Filter by involved address",
-    example: "cosmos1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "addr_safro1abc123def456ghi789jkl012mno345pqr678stu",
     required: false,
   })
   @ApiQuery({
     name: "types",
     description: "Filter by multiple message types",
     example: [
-      "/cosmos.bank.v1beta1.MsgSend",
-      "/cosmos.staking.v1beta1.MsgDelegate",
+      "cosmos.bank.v1beta1.MsgSend",
+      "cosmos.staking.v1beta1.MsgDelegate",
     ],
     required: false,
   })
@@ -309,7 +314,7 @@ export class MessageController {
   @ApiParam({
     name: "type",
     description: "Message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   @ApiResponse({
     status: 200,
@@ -350,6 +355,8 @@ export class MessageController {
     description: "Message statistics retrieved successfully",
     type: MessageStatisticsDto,
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getMessageStatistics(): Promise<MessageStatisticsDto> {
     return await this.messageService.getMessageStatistics();
   }
@@ -363,7 +370,7 @@ export class MessageController {
   @ApiParam({
     name: "address",
     description: "Account address",
-    example: "cosmos1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "addr_safro1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiQuery({
     name: "page",
@@ -383,7 +390,7 @@ export class MessageController {
   })
   async getMessagesByAddress(
     @Param("address") address: string,
-    @Query() pagination: { page?: number; limit?: number }
+    @Query() pagination: PaginationDto
   ) {
     return await this.messageService.getMessagesByAddress(address, pagination);
   }
@@ -396,7 +403,7 @@ export class MessageController {
   @ApiParam({
     name: "type",
     description: "Message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   @ApiQuery({
     name: "page",
@@ -416,7 +423,7 @@ export class MessageController {
   })
   async getMessagesByType(
     @Param("type") type: string,
-    @Query() pagination: { page?: number; limit?: number }
+    @Query() pagination: PaginationDto
   ) {
     return await this.messageService.getMessagesByType(type, pagination);
   }
@@ -430,7 +437,7 @@ export class MessageController {
   @ApiQuery({
     name: "q",
     description: "Search query",
-    example: "cosmos1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "addr_safro1abc123def456ghi789jkl012mno345pqr678stu",
     required: true,
   })
   @ApiQuery({
@@ -451,7 +458,7 @@ export class MessageController {
   })
   async searchMessages(
     @Query("q") query: string,
-    @Query() pagination: { page?: number; limit?: number }
+    @Query() pagination: PaginationDto
   ) {
     if (!query) {
       throw new HttpException(

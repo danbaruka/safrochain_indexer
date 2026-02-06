@@ -5,7 +5,9 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  UseInterceptors,
 } from "@nestjs/common";
+import { CacheInterceptor, CacheTTL } from "@nestjs/cache-manager";
 import {
   ApiTags,
   ApiOperation,
@@ -372,7 +374,7 @@ export class AddressController {
     name: "message_types",
     description: "Filter by message types",
     required: false,
-    example: ["/cosmos.bank.v1beta1.MsgSend"],
+    example: ["cosmos.bank.v1beta1.MsgSend"],
     type: [String],
   })
   @ApiQuery({
@@ -528,6 +530,8 @@ export class AddressController {
     description: "Address transaction statistics retrieved successfully",
     type: AddressTransactionStatisticsDto,
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   @ApiResponse({
     status: 404,
     description: "Address not found",

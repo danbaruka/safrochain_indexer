@@ -5,7 +5,9 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  UseInterceptors,
 } from "@nestjs/common";
+import { CacheInterceptor, CacheTTL } from "@nestjs/cache-manager";
 import {
   ApiTags,
   ApiOperation,
@@ -25,7 +27,10 @@ import {
   TransactionStatisticsDto,
   TransactionAnalyticsDto,
 } from "../../dto/transaction-filter.dto";
-import { PaginatedResponseDto } from "../../common/dto/pagination.dto";
+import {
+  OffsetPaginationDto,
+  PaginatedResponseDto,
+} from "../../common/dto/pagination.dto";
 
 @ApiTags("Transaction")
 @Controller("transaction")
@@ -96,7 +101,7 @@ export class TransactionController {
   @ApiQuery({
     name: "message_type",
     description: "Filter by message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
     required: false,
   })
   @ApiQuery({
@@ -133,7 +138,7 @@ export class TransactionController {
         type: "object",
         properties: {
           index: { type: "number", example: 0 },
-          type: { type: "string", example: "/cosmos.bank.v1beta1.MsgSend" },
+          type: { type: "string", example: "cosmos.bank.v1beta1.MsgSend" },
           value: { type: "object" },
           involved_addresses: {
             type: "array",
@@ -193,8 +198,8 @@ export class TransactionController {
           type: "array",
           items: { type: "string" },
           example: [
-            "/cosmos.bank.v1beta1.MsgSend",
-            "/cosmos.staking.v1beta1.MsgDelegate",
+            "cosmos.bank.v1beta1.MsgSend",
+            "cosmos.staking.v1beta1.MsgDelegate",
           ],
         },
         involved_addresses_count: { type: "number", example: 3 },
@@ -305,7 +310,7 @@ export class TransactionController {
   @ApiParam({
     name: "messageType",
     description: "Message type to filter by",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   @ApiQuery({
     name: "limit",
@@ -326,14 +331,13 @@ export class TransactionController {
   })
   async getTransactionsByMessageType(
     @Param("messageType") messageType: string,
-    @Query("limit") limit: number = 20,
-    @Query("offset") offset: number = 0
+    @Query() pagination: OffsetPaginationDto
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
     try {
       return await this.transactionService.getTransactionsByMessageType(
         messageType,
-        limit,
-        offset
+        pagination.limit,
+        pagination.offset
       );
     } catch (error) {
       throw new HttpException(
@@ -357,7 +361,7 @@ export class TransactionController {
   @ApiParam({
     name: "validatorAddress",
     description: "Validator address to filter by",
-    example: "safrovaloper1xyz789abc123def456ghi789jkl012mno345pqr",
+    example: "safrovaloper1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiQuery({
     name: "limit",
@@ -378,14 +382,13 @@ export class TransactionController {
   })
   async getTransactionsByValidator(
     @Param("validatorAddress") validatorAddress: string,
-    @Query("limit") limit: number = 20,
-    @Query("offset") offset: number = 0
+    @Query() pagination: OffsetPaginationDto
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
     try {
       return await this.transactionService.getTransactionsByValidator(
         validatorAddress,
-        limit,
-        offset
+        pagination.limit,
+        pagination.offset
       );
     } catch (error) {
       throw new HttpException(
@@ -436,15 +439,14 @@ export class TransactionController {
   async getTransactionsByBlockRange(
     @Param("minHeight") minHeight: number,
     @Param("maxHeight") maxHeight: number,
-    @Query("limit") limit: number = 20,
-    @Query("offset") offset: number = 0
+    @Query() pagination: OffsetPaginationDto
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
     try {
       return await this.transactionService.getTransactionsByBlockRange(
         minHeight,
         maxHeight,
-        limit,
-        offset
+        pagination.limit,
+        pagination.offset
       );
     } catch (error) {
       throw new HttpException(
@@ -470,6 +472,8 @@ export class TransactionController {
     description: "Global statistics retrieved successfully",
     type: TransactionStatisticsDto,
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(60)
   async getGlobalTransactionStatistics(): Promise<TransactionStatisticsDto> {
     try {
       return await this.transactionService.getGlobalTransactionStatistics();
@@ -497,6 +501,8 @@ export class TransactionController {
     description: "Analytics retrieved successfully",
     type: TransactionAnalyticsDto,
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getTransactionAnalytics(): Promise<TransactionAnalyticsDto> {
     try {
       return await this.transactionService.getTransactionAnalytics();
