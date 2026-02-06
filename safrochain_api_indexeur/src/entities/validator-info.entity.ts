@@ -6,14 +6,14 @@ import { Validator } from "./validator.entity";
 export class ValidatorInfo {
   @ApiProperty({
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @PrimaryColumn({ type: "text" })
   consensus_address: string;
 
   @ApiProperty({
     description: "Validator operator address",
-    example: "cosmosvaloper1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovaloper1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @Column({ type: "text", unique: true })
   operator_address: string;

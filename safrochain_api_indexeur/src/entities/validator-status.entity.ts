@@ -6,7 +6,7 @@ import { Validator } from "./validator.entity";
 export class ValidatorStatus {
   @ApiProperty({
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @PrimaryColumn({ type: "text" })
   validator_address: string;

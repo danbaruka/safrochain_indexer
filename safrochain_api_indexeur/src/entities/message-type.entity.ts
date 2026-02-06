@@ -5,7 +5,7 @@ import { ApiProperty } from "@nestjs/swagger";
 export class MessageType {
   @ApiProperty({
     description: "Message type identifier",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   @PrimaryColumn({ type: "text" })
   type: string;

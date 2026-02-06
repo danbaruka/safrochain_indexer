@@ -20,7 +20,7 @@ export class Message {
 
   @ApiProperty({
     description: "Message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   @Column({ type: "text" })
   type: string;

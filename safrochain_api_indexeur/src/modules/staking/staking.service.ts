@@ -101,7 +101,7 @@ export class StakingService {
       .leftJoinAndSelect("message.transaction", "transaction")
       .leftJoinAndSelect("transaction.block", "block")
       .where("message.type = :type", {
-        type: "/cosmos.staking.v1beta1.MsgDelegate",
+        type: "cosmos.staking.v1beta1.MsgDelegate",
       })
       .andWhere(":address = ANY(message.involved_accounts_addresses)", {
         address,
@@ -141,7 +141,7 @@ export class StakingService {
       .leftJoinAndSelect("message.transaction", "transaction")
       .leftJoinAndSelect("transaction.block", "block")
       .where("message.type = :type", {
-        type: "/cosmos.staking.v1beta1.MsgDelegate",
+        type: "cosmos.staking.v1beta1.MsgDelegate",
       })
       .andWhere(
         ":validatorAddress = ANY(message.involved_accounts_addresses)",
@@ -180,7 +180,7 @@ export class StakingService {
       .leftJoinAndSelect("message.transaction", "transaction")
       .leftJoinAndSelect("transaction.block", "block")
       .where("message.type = :type", {
-        type: "/cosmos.staking.v1beta1.MsgUndelegate",
+        type: "cosmos.staking.v1beta1.MsgUndelegate",
       })
       .andWhere(":address = ANY(message.involved_accounts_addresses)", {
         address,
@@ -216,7 +216,7 @@ export class StakingService {
       .leftJoinAndSelect("message.transaction", "transaction")
       .leftJoinAndSelect("transaction.block", "block")
       .where("message.type = :type", {
-        type: "/cosmos.staking.v1beta1.MsgUndelegate",
+        type: "cosmos.staking.v1beta1.MsgUndelegate",
       })
       .andWhere(
         ":validatorAddress = ANY(message.involved_accounts_addresses)",
@@ -256,7 +256,7 @@ export class StakingService {
       .leftJoinAndSelect("message.transaction", "transaction")
       .leftJoinAndSelect("transaction.block", "block")
       .where("message.type = :type", {
-        type: "/cosmos.staking.v1beta1.MsgBeginRedelegate",
+        type: "cosmos.staking.v1beta1.MsgBeginRedelegate",
       })
       .andWhere(":address = ANY(message.involved_accounts_addresses)", {
         address,
@@ -294,7 +294,7 @@ export class StakingService {
       .leftJoinAndSelect("message.transaction", "transaction")
       .leftJoinAndSelect("transaction.block", "block")
       .where("message.type = :type", {
-        type: "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
+        type: "cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
       })
       .andWhere(":address = ANY(message.involved_accounts_addresses)", {
         address,
@@ -329,7 +329,7 @@ export class StakingService {
       .leftJoinAndSelect("message.transaction", "transaction")
       .leftJoinAndSelect("transaction.block", "block")
       .where("message.type = :type", {
-        type: "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
+        type: "cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
       })
       .andWhere(
         ":validatorAddress = ANY(message.involved_accounts_addresses)",
@@ -508,17 +508,17 @@ export class StakingService {
       activeValidators,
     ] = await Promise.all([
       this.messageRepository.count({
-        where: { type: "/cosmos.staking.v1beta1.MsgDelegate" },
+        where: { type: "cosmos.staking.v1beta1.MsgDelegate" },
       }),
       this.messageRepository.count({
-        where: { type: "/cosmos.staking.v1beta1.MsgUndelegate" },
+        where: { type: "cosmos.staking.v1beta1.MsgUndelegate" },
       }),
       this.messageRepository.count({
-        where: { type: "/cosmos.staking.v1beta1.MsgBeginRedelegate" },
+        where: { type: "cosmos.staking.v1beta1.MsgBeginRedelegate" },
       }),
       this.messageRepository.count({
         where: {
-          type: "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
+          type: "cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
         },
       }),
       this.validatorSigningInfoRepository.count({

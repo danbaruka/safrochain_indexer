@@ -149,7 +149,7 @@ export class ProposalResponseDto {
 
   @ApiProperty({
     description: "Proposal content",
-    example: '[{"type": "/cosmos.gov.v1beta1.TextProposal", "value": {...}}]',
+    example: '[{"type": "cosmos.gov.v1beta1.TextProposal", "value": {...}}]',
   })
   content: any[];
 

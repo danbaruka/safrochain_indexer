@@ -34,7 +34,7 @@ export class ValidatorController {
   @ApiParam({
     name: "address",
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiResponse({
     status: 200,
@@ -116,7 +116,7 @@ export class ValidatorController {
   @ApiParam({
     name: "address",
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiResponse({
     status: 200,
@@ -126,17 +126,17 @@ export class ValidatorController {
       properties: {
         consensus_address: {
           type: "string",
-          example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+          example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
         },
         description: {
           type: "object",
           properties: {
-            moniker: { type: "string", example: "Cosmos Validator" },
+            moniker: { type: "string", example: "Safrochain Validator" },
             identity: {
               type: "string",
               example: "A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6",
             },
-            website: { type: "string", example: "https://cosmosvalidator.com" },
+            website: { type: "string", example: "https://safrochain.com" },
             details: {
               type: "string",
               example: "Professional validator with 99.9% uptime",
@@ -147,7 +147,7 @@ export class ValidatorController {
             },
             security_contact: {
               type: "string",
-              example: "security@cosmosvalidator.com",
+              example: "security@safrochain.com",
             },
           },
         },
@@ -188,7 +188,7 @@ export class ValidatorController {
   @ApiParam({
     name: "address",
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiResponse({
     status: 200,
@@ -198,7 +198,7 @@ export class ValidatorController {
       properties: {
         consensus_address: {
           type: "string",
-          example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+          example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
         },
         commission: {
           type: "object",
@@ -244,7 +244,7 @@ export class ValidatorController {
   @ApiParam({
     name: "address",
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiResponse({
     status: 200,
@@ -254,7 +254,7 @@ export class ValidatorController {
       properties: {
         consensus_address: {
           type: "string",
-          example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+          example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
         },
         voting_power: {
           type: "object",
@@ -300,7 +300,7 @@ export class ValidatorController {
   @ApiParam({
     name: "address",
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiResponse({
     status: 200,
@@ -310,7 +310,7 @@ export class ValidatorController {
       properties: {
         consensus_address: {
           type: "string",
-          example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+          example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
         },
         status: {
           type: "object",
@@ -357,7 +357,7 @@ export class ValidatorController {
   @ApiParam({
     name: "address",
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiResponse({
     status: 200,
@@ -367,7 +367,7 @@ export class ValidatorController {
       properties: {
         consensus_address: {
           type: "string",
-          example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+          example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
         },
         statistics: {
           type: "object",
@@ -418,7 +418,7 @@ export class ValidatorController {
   @ApiParam({
     name: "address",
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @ApiResponse({
     status: 200,
@@ -428,7 +428,7 @@ export class ValidatorController {
       properties: {
         consensus_address: {
           type: "string",
-          example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+          example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
         },
         recent_activity: {
           type: "array",

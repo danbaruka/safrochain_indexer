@@ -51,7 +51,7 @@ export class BlockResponseDto {
 
   @ApiProperty({
     description: "Block proposer address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   proposer_address: string;
 
@@ -66,9 +66,9 @@ export class BlockResponseDto {
     description: "Block proposer information",
     example: {
       consensus_address:
-        "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
-      operator_address: "cosmosvaloper1abc123def456ghi789jkl012mno345pqr678stu",
-      moniker: "Cosmos Validator",
+        "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
+      operator_address: "safrovaloper1abc123def456ghi789jkl012mno345pqr678stu",
+      moniker: "Safrochain Validator",
     },
   })
   proposer: any;
@@ -90,7 +90,7 @@ export class BlockResponseDto {
         hash: "ABC123DEF456GHI789JKL012MNO345PQR678STUVWXYZ",
         success: true,
         gas_used: 150000,
-        messages: ["/cosmos.bank.v1beta1.MsgSend"],
+        messages: ["cosmos.bank.v1beta1.MsgSend"],
       },
     ],
   })
@@ -122,7 +122,7 @@ export class BlockListDto extends DateFilterDto {
 
   @ApiProperty({
     description: "Filter by proposer address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
     required: false,
   })
   @IsOptional()

@@ -18,7 +18,7 @@ export class MessageParserService {
   private initializeMessageTypes() {
     // Bank module messages
     this.addMessageType({
-      type: "/cosmos.bank.v1beta1.MsgSend",
+      type: "cosmos.bank.v1beta1.MsgSend",
       module: "bank",
       label: "Send",
       description: "Send coins from one account to another",
@@ -46,7 +46,7 @@ export class MessageParserService {
     });
 
     this.addMessageType({
-      type: "/cosmos.bank.v1beta1.MsgMultiSend",
+      type: "cosmos.bank.v1beta1.MsgMultiSend",
       module: "bank",
       label: "Multi Send",
       description: "Send coins to multiple recipients",
@@ -69,7 +69,7 @@ export class MessageParserService {
 
     // Staking module messages
     this.addMessageType({
-      type: "/cosmos.staking.v1beta1.MsgDelegate",
+      type: "cosmos.staking.v1beta1.MsgDelegate",
       module: "staking",
       label: "Delegate",
       description: "Delegate tokens to a validator",
@@ -97,7 +97,7 @@ export class MessageParserService {
     });
 
     this.addMessageType({
-      type: "/cosmos.staking.v1beta1.MsgUndelegate",
+      type: "cosmos.staking.v1beta1.MsgUndelegate",
       module: "staking",
       label: "Undelegate",
       description: "Undelegate tokens from a validator",
@@ -125,7 +125,7 @@ export class MessageParserService {
     });
 
     this.addMessageType({
-      type: "/cosmos.staking.v1beta1.MsgBeginRedelegate",
+      type: "cosmos.staking.v1beta1.MsgBeginRedelegate",
       module: "staking",
       label: "Redelegate",
       description: "Redelegate tokens from one validator to another",
@@ -160,7 +160,7 @@ export class MessageParserService {
 
     // Governance module messages
     this.addMessageType({
-      type: "/cosmos.gov.v1.MsgSubmitProposal",
+      type: "cosmos.gov.v1.MsgSubmitProposal",
       module: "gov",
       label: "Submit Proposal",
       description: "Submit a governance proposal",
@@ -206,7 +206,7 @@ export class MessageParserService {
     });
 
     this.addMessageType({
-      type: "/cosmos.gov.v1.MsgDeposit",
+      type: "cosmos.gov.v1.MsgDeposit",
       module: "gov",
       label: "Deposit",
       description: "Deposit tokens for a governance proposal",
@@ -234,7 +234,7 @@ export class MessageParserService {
     });
 
     this.addMessageType({
-      type: "/cosmos.gov.v1.MsgVote",
+      type: "cosmos.gov.v1.MsgVote",
       module: "gov",
       label: "Vote",
       description: "Vote on a governance proposal",
@@ -269,7 +269,7 @@ export class MessageParserService {
 
     // Distribution module messages
     this.addMessageType({
-      type: "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
+      type: "cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
       module: "distribution",
       label: "Withdraw Rewards",
       description: "Withdraw delegation rewards",
@@ -292,7 +292,7 @@ export class MessageParserService {
 
     // Slashing module messages
     this.addMessageType({
-      type: "/cosmos.slashing.v1beta1.MsgUnjail",
+      type: "cosmos.slashing.v1beta1.MsgUnjail",
       module: "slashing",
       label: "Unjail",
       description: "Unjail a validator",
@@ -309,7 +309,7 @@ export class MessageParserService {
 
     // Auth module messages
     this.addMessageType({
-      type: "/cosmos.auth.v1beta1.MsgUpdateParams",
+      type: "cosmos.auth.v1beta1.MsgUpdateParams",
       module: "auth",
       label: "Update Auth Params",
       description: "Update authentication parameters",
@@ -332,7 +332,7 @@ export class MessageParserService {
 
     // Fee grant module messages
     this.addMessageType({
-      type: "/cosmos.feegrant.v1beta1.MsgGrantAllowance",
+      type: "cosmos.feegrant.v1beta1.MsgGrantAllowance",
       module: "feegrant",
       label: "Grant Fee Allowance",
       description: "Grant fee allowance to another account",
@@ -360,7 +360,7 @@ export class MessageParserService {
     });
 
     this.addMessageType({
-      type: "/cosmos.feegrant.v1beta1.MsgRevokeAllowance",
+      type: "cosmos.feegrant.v1beta1.MsgRevokeAllowance",
       module: "feegrant",
       label: "Revoke Fee Allowance",
       description: "Revoke fee allowance from another account",
@@ -383,7 +383,7 @@ export class MessageParserService {
 
     // Upgrade module messages
     this.addMessageType({
-      type: "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade",
+      type: "cosmos.upgrade.v1beta1.MsgSoftwareUpgrade",
       module: "upgrade",
       label: "Software Upgrade",
       description: "Propose a software upgrade",
@@ -405,7 +405,7 @@ export class MessageParserService {
     });
 
     this.addMessageType({
-      type: "/cosmos.upgrade.v1beta1.MsgCancelUpgrade",
+      type: "cosmos.upgrade.v1beta1.MsgCancelUpgrade",
       module: "upgrade",
       label: "Cancel Upgrade",
       description: "Cancel a software upgrade",
@@ -422,7 +422,7 @@ export class MessageParserService {
 
     // Evidence module messages
     this.addMessageType({
-      type: "/cosmos.evidence.v1beta1.MsgSubmitEvidence",
+      type: "cosmos.evidence.v1beta1.MsgSubmitEvidence",
       module: "evidence",
       label: "Submit Evidence",
       description: "Submit evidence of misbehavior",
@@ -522,10 +522,10 @@ export class MessageParserService {
     type: string
   ): ParsedAmount[] | undefined {
     switch (type) {
-      case "/cosmos.bank.v1beta1.MsgSend":
+      case "cosmos.bank.v1beta1.MsgSend":
         return value.amount || [];
 
-      case "/cosmos.bank.v1beta1.MsgMultiSend":
+      case "cosmos.bank.v1beta1.MsgMultiSend":
         const amounts: ParsedAmount[] = [];
         if (value.inputs) {
           value.inputs.forEach((input: any) => {
@@ -536,15 +536,15 @@ export class MessageParserService {
         }
         return amounts.length > 0 ? amounts : undefined;
 
-      case "/cosmos.staking.v1beta1.MsgDelegate":
-      case "/cosmos.staking.v1beta1.MsgUndelegate":
-      case "/cosmos.staking.v1beta1.MsgBeginRedelegate":
+      case "cosmos.staking.v1beta1.MsgDelegate":
+      case "cosmos.staking.v1beta1.MsgUndelegate":
+      case "cosmos.staking.v1beta1.MsgBeginRedelegate":
         return value.amount ? [value.amount] : undefined;
 
-      case "/cosmos.gov.v1.MsgSubmitProposal":
+      case "cosmos.gov.v1.MsgSubmitProposal":
         return value.initial_deposit || [];
 
-      case "/cosmos.gov.v1.MsgDeposit":
+      case "cosmos.gov.v1.MsgDeposit":
         return value.amount || [];
 
       default:
@@ -560,12 +560,12 @@ export class MessageParserService {
     const addresses: string[] = [];
 
     switch (type) {
-      case "/cosmos.bank.v1beta1.MsgSend":
+      case "cosmos.bank.v1beta1.MsgSend":
         if (value.from_address) addresses.push(value.from_address);
         if (value.to_address) addresses.push(value.to_address);
         break;
 
-      case "/cosmos.bank.v1beta1.MsgMultiSend":
+      case "cosmos.bank.v1beta1.MsgMultiSend":
         if (value.inputs) {
           value.inputs.forEach((input: any) => {
             if (input.address) addresses.push(input.address);
@@ -578,13 +578,13 @@ export class MessageParserService {
         }
         break;
 
-      case "/cosmos.staking.v1beta1.MsgDelegate":
-      case "/cosmos.staking.v1beta1.MsgUndelegate":
+      case "cosmos.staking.v1beta1.MsgDelegate":
+      case "cosmos.staking.v1beta1.MsgUndelegate":
         if (value.delegator_address) addresses.push(value.delegator_address);
         if (value.validator_address) addresses.push(value.validator_address);
         break;
 
-      case "/cosmos.staking.v1beta1.MsgBeginRedelegate":
+      case "cosmos.staking.v1beta1.MsgBeginRedelegate":
         if (value.delegator_address) addresses.push(value.delegator_address);
         if (value.validator_src_address)
           addresses.push(value.validator_src_address);
@@ -592,39 +592,39 @@ export class MessageParserService {
           addresses.push(value.validator_dst_address);
         break;
 
-      case "/cosmos.gov.v1.MsgSubmitProposal":
+      case "cosmos.gov.v1.MsgSubmitProposal":
         if (value.proposer) addresses.push(value.proposer);
         break;
 
-      case "/cosmos.gov.v1.MsgDeposit":
+      case "cosmos.gov.v1.MsgDeposit":
         if (value.depositor) addresses.push(value.depositor);
         break;
 
-      case "/cosmos.gov.v1.MsgVote":
+      case "cosmos.gov.v1.MsgVote":
         if (value.voter) addresses.push(value.voter);
         break;
 
-      case "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward":
+      case "cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward":
         if (value.delegator_address) addresses.push(value.delegator_address);
         if (value.validator_address) addresses.push(value.validator_address);
         break;
 
-      case "/cosmos.slashing.v1beta1.MsgUnjail":
+      case "cosmos.slashing.v1beta1.MsgUnjail":
         if (value.validator_addr) addresses.push(value.validator_addr);
         break;
 
-      case "/cosmos.feegrant.v1beta1.MsgGrantAllowance":
-      case "/cosmos.feegrant.v1beta1.MsgRevokeAllowance":
+      case "cosmos.feegrant.v1beta1.MsgGrantAllowance":
+      case "cosmos.feegrant.v1beta1.MsgRevokeAllowance":
         if (value.granter) addresses.push(value.granter);
         if (value.grantee) addresses.push(value.grantee);
         break;
 
-      case "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade":
-      case "/cosmos.upgrade.v1beta1.MsgCancelUpgrade":
+      case "cosmos.upgrade.v1beta1.MsgSoftwareUpgrade":
+      case "cosmos.upgrade.v1beta1.MsgCancelUpgrade":
         if (value.authority) addresses.push(value.authority);
         break;
 
-      case "/cosmos.evidence.v1beta1.MsgSubmitEvidence":
+      case "cosmos.evidence.v1beta1.MsgSubmitEvidence":
         if (value.submitter) addresses.push(value.submitter);
         break;
 

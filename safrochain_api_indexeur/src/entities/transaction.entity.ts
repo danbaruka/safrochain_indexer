@@ -35,7 +35,7 @@ export class Transaction {
 
   @ApiProperty({
     description: "Transaction messages (JSON)",
-    example: '[{"type": "/cosmos.bank.v1beta1.MsgSend", "value": {...}}]',
+    example: '[{"type": "cosmos.bank.v1beta1.MsgSend", "value": {...}}]',
   })
   @Column({ type: "json" })
   messages: any[];

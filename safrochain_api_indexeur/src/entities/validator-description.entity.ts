@@ -6,14 +6,14 @@ import { Validator } from "./validator.entity";
 export class ValidatorDescription {
   @ApiProperty({
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @PrimaryColumn({ type: "text" })
   validator_address: string;
 
   @ApiProperty({
     description: "Validator moniker (name)",
-    example: "Cosmos Validator",
+    example: "Safrochain Validator",
   })
   @Column({ type: "text", nullable: true })
   moniker?: string;
@@ -34,14 +34,14 @@ export class ValidatorDescription {
 
   @ApiProperty({
     description: "Validator website",
-    example: "https://cosmosvalidator.com",
+    example: "https://safrochain.com",
   })
   @Column({ type: "text", nullable: true })
   website?: string;
 
   @ApiProperty({
     description: "Security contact information",
-    example: "security@cosmosvalidator.com",
+    example: "security@safrochain.com",
   })
   @Column({ type: "text", nullable: true })
   security_contact?: string;

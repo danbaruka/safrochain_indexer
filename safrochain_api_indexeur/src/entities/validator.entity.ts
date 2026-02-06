@@ -11,14 +11,14 @@ import { ValidatorStatus } from "./validator-status.entity";
 export class Validator {
   @ApiProperty({
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @PrimaryColumn({ type: "text" })
   consensus_address: string;
 
   @ApiProperty({
     description: "Validator consensus public key",
-    example: "cosmosvalconspub1addwnpepq...",
+    example: "safrovalconspub1addwnpepq...",
   })
   @Column({ type: "text", unique: true })
   consensus_pubkey: string;

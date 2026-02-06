@@ -46,7 +46,7 @@ export class Proposal {
 
   @ApiProperty({
     description: "Proposal content (JSON)",
-    example: '[{"type": "/cosmos.gov.v1beta1.TextProposal", "value": {...}}]',
+    example: '[{"type": "cosmos.gov.v1beta1.TextProposal", "value": {...}}]',
   })
   @Column({ type: "jsonb" })
   content: any[];

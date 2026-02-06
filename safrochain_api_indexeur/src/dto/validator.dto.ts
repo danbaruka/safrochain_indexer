@@ -5,7 +5,7 @@ import { Type } from "class-transformer";
 export class ValidatorAddressDto {
   @ApiProperty({
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   @IsString()
   @IsNotEmpty()
@@ -15,19 +15,19 @@ export class ValidatorAddressDto {
 export class ValidatorResponseDto {
   @ApiProperty({
     description: "Validator consensus address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
   })
   consensus_address: string;
 
   @ApiProperty({
     description: "Validator operator address",
-    example: "cosmosvaloper1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovaloper1abc123def456ghi789jkl012mno345pqr678stu",
   })
   operator_address: string;
 
   @ApiProperty({
     description: "Validator consensus public key",
-    example: "cosmosvalconspub1addwnpepq...",
+    example: "safrovalconspub1addwnpepq...",
   })
   consensus_pubkey: string;
 
@@ -45,9 +45,9 @@ export class ValidatorResponseDto {
   @ApiProperty({
     description: "Validator description",
     example: {
-      moniker: "Cosmos Validator",
+      moniker: "Safrochain Validator",
       identity: "A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6",
-      website: "https://cosmosvalidator.com",
+      website: "https://safrochain.com",
       details: "Professional validator with 99.9% uptime",
     },
   })
