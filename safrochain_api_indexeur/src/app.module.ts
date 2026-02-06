@@ -1,6 +1,9 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
+import { APP_GUARD } from "@nestjs/core";
+import { CacheModule } from "@nestjs/cache-manager";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AddressModule } from "./modules/address/address.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
 import { ValidatorModule } from "./modules/validator/validator.module";
@@ -55,6 +58,26 @@ import { Genesis } from "./entities/genesis.entity";
       isGlobal: true,
       load: [databaseConfig, appConfig, swaggerConfig],
       envFilePath: ".env",
+    }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        ttl: (configService.get<number>("app.cacheTtl") ?? 60) * 1000,
+      }),
+    }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: (configService.get<number>("app.rateLimitTtl") ?? 60) * 1000,
+            limit: configService.get<number>("app.rateLimitLimit") ?? 120,
+          },
+        ],
+      }),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -121,6 +144,12 @@ import { Genesis } from "./entities/genesis.entity";
     TokenModule,
     SupplyModule,
     GenesisModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}
