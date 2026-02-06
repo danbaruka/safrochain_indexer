@@ -11,4 +11,8 @@ export default registerAs("app", () => ({
   defaultPageSize: parseInt(process.env.DEFAULT_PAGE_SIZE, 10) || 20,
   maxPageSize: parseInt(process.env.MAX_PAGE_SIZE, 10) || 100,
   environment: process.env.NODE_ENV || "development",
+  corsOrigins: process.env.CORS_ORIGINS || "",
+  rateLimitTtl: parseInt(process.env.RATE_LIMIT_TTL, 10) || 60,
+  rateLimitLimit: parseInt(process.env.RATE_LIMIT_LIMIT, 10) || 120,
+  cacheTtl: parseInt(process.env.CACHE_TTL, 10) || 60,
 }));
