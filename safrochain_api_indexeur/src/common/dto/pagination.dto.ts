@@ -34,6 +34,38 @@ export class PaginationDto {
   }
 }
 
+export class OffsetPaginationDto {
+  @ApiPropertyOptional({
+    description: "Number of items per page",
+    minimum: 1,
+    maximum: 100,
+    default: 20,
+    example: 20,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+
+  @ApiPropertyOptional({
+    description: "Number of items to skip",
+    minimum: 0,
+    default: 0,
+    example: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number = 0;
+
+  get page(): number {
+    return Math.floor((this.offset || 0) / (this.limit || 20)) + 1;
+  }
+}
+
 export class PaginationMetaDto {
   @ApiPropertyOptional({
     description: "Current page number",
