@@ -125,7 +125,7 @@ export class BlockController {
   @ApiQuery({
     name: "proposer",
     description: "Filter by proposer address",
-    example: "cosmosvalcons1abc123def456ghi789jkl012mno345pqr678stu",
+    example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",
     required: false,
   })
   @ApiQuery({

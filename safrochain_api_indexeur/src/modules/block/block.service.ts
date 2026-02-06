@@ -98,7 +98,6 @@ export class BlockService {
   async getBlocks(filters: BlockListDto): Promise<PaginatedResponseDto<any>> {
     const queryBuilder = this.blockRepository
       .createQueryBuilder("block")
-      .leftJoinAndSelect("block.proposer", "proposer")
       .orderBy("block.height", "DESC");
 
     // Apply filters
@@ -141,9 +140,9 @@ export class BlockService {
       total_gas: block.total_gas,
       proposer_address: block.proposer_address,
       timestamp: block.timestamp,
-      proposer: block.proposer
+      proposer: block.proposer_address
         ? {
-            consensus_address: block.proposer.consensus_address,
+            consensus_address: block.proposer_address,
             operator_address: "",
             moniker: "",
           }
