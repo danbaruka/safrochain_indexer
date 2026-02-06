@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsInt,
   Min,
+  Max,
   IsArray,
   IsDateString,
   IsEnum,
@@ -150,8 +151,8 @@ export class TransactionFilterDto {
     description: "Filter by message types",
     required: false,
     example: [
-      "/cosmos.bank.v1beta1.MsgSend",
-      "/cosmos.staking.v1beta1.MsgDelegate",
+      "cosmos.bank.v1beta1.MsgSend",
+      "cosmos.staking.v1beta1.MsgDelegate",
     ],
     type: [String],
   })
@@ -208,6 +209,7 @@ export class TransactionFilterDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(100)
   @Type(() => Number)
   limit?: number = 20;
 
@@ -264,6 +266,7 @@ export class TransactionSearchDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(100)
   @Type(() => Number)
   limit?: number = 20;
 
@@ -343,8 +346,8 @@ export class TransactionStatisticsDto {
   @ApiProperty({
     description: "Most common message types",
     example: [
-      { type: "/cosmos.bank.v1beta1.MsgSend", count: 5000 },
-      { type: "/cosmos.staking.v1beta1.MsgDelegate", count: 3000 },
+      { type: "cosmos.bank.v1beta1.MsgSend", count: 5000 },
+      { type: "cosmos.staking.v1beta1.MsgDelegate", count: 3000 },
     ],
   })
   top_message_types: Array<{ type: string; count: number }>;
@@ -419,7 +422,7 @@ export class TransactionAnalyticsDto {
   @ApiProperty({
     description: "Message type distribution",
     example: [
-      { type: "/cosmos.bank.v1beta1.MsgSend", count: 5000, percentage: 33.33 },
+      { type: "cosmos.bank.v1beta1.MsgSend", count: 5000, percentage: 33.33 },
     ],
   })
   message_type_distribution: Array<{

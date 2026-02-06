@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsInt,
   Min,
+  Max,
   IsArray,
   IsDateString,
   IsEnum,
@@ -142,8 +143,8 @@ export class AddressTransactionFilterDto {
     description: "Filter by message types",
     required: false,
     example: [
-      "/cosmos.bank.v1beta1.MsgSend",
-      "/cosmos.staking.v1beta1.MsgDelegate",
+      "cosmos.bank.v1beta1.MsgSend",
+      "cosmos.staking.v1beta1.MsgDelegate",
     ],
     type: [String],
   })
@@ -237,6 +238,7 @@ export class AddressTransactionFilterDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(100)
   @Type(() => Number)
   limit?: number = 20;
 
@@ -402,7 +404,7 @@ export class AddressTransactionResponseDto {
     description: "Transaction messages",
     example: [
       {
-        type: "/cosmos.bank.v1beta1.MsgSend",
+        type: "cosmos.bank.v1beta1.MsgSend",
         value: {
           from_address: "safro1abc123def456ghi789jkl012mno345pqr678stu",
           to_address: "safro1xyz789abc123def456ghi789jkl012mno345pqr",
@@ -451,7 +453,7 @@ export class AddressTransactionResponseDto {
         },
         public_key: {
           key: "A2+siD64fZj3m6Ft2xR8HmndEQZSN0vpmS/0z7cP95Vo",
-          "@type": "/cosmos.crypto.secp256k1.PubKey",
+          "@type": "cosmos.crypto.secp256k1.PubKey",
         },
       },
     ],
@@ -485,7 +487,7 @@ export class AddressTransactionResponseDto {
 
   @ApiProperty({
     description: "Unique message types",
-    example: ["/cosmos.bank.v1beta1.MsgSend"],
+    example: ["cosmos.bank.v1beta1.MsgSend"],
   })
   message_types: string[];
 
@@ -589,8 +591,8 @@ export class AddressTransactionStatisticsDto {
   @ApiProperty({
     description: "Most common message types",
     example: [
-      { type: "/cosmos.bank.v1beta1.MsgSend", count: 50 },
-      { type: "/cosmos.staking.v1beta1.MsgDelegate", count: 30 },
+      { type: "cosmos.bank.v1beta1.MsgSend", count: 50 },
+      { type: "cosmos.staking.v1beta1.MsgDelegate", count: 30 },
     ],
   })
   top_message_types: Array<{ type: string; count: number }>;

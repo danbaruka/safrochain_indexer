@@ -1,5 +1,12 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsString, IsNotEmpty, IsOptional, IsInt, Min } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+} from "class-validator";
 import { Type } from "class-transformer";
 import { DateSerializer } from "../common/utils/date-serializer.util";
 
@@ -71,7 +78,7 @@ export class TransactionResponseDto {
     description: "Transaction messages",
     example: [
       {
-        type: "/cosmos.bank.v1beta1.MsgSend",
+        type: "cosmos.bank.v1beta1.MsgSend",
         value: {
           from_address: "addr_safro1abc123def456ghi789jkl012mno345pqr678stu",
           to_address: "addr_safro1xyz789uvw012rst345mno678pqr901stu234vwx",
@@ -119,7 +126,7 @@ export class TransactionResponseDto {
     example: [
       {
         public_key: {
-          type: "/cosmos.crypto.secp256k1.PubKey",
+          type: "cosmos.crypto.secp256k1.PubKey",
           value: "A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0U1V2W3X4Y5Z6",
         },
         mode_info: { single: { mode: "SIGN_MODE_DIRECT" } },
@@ -138,8 +145,8 @@ export class TransactionResponseDto {
   @ApiProperty({
     description: "Unique message types in transaction",
     example: [
-      "/cosmos.bank.v1beta1.MsgSend",
-      "/cosmos.staking.v1beta1.MsgDelegate",
+      "cosmos.bank.v1beta1.MsgSend",
+      "cosmos.staking.v1beta1.MsgDelegate",
     ],
   })
   message_types: string[];
@@ -178,6 +185,7 @@ export class TransactionListDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(100)
   limit?: number = 20;
 
   @ApiProperty({
@@ -191,7 +199,7 @@ export class TransactionListDto {
 
   @ApiProperty({
     description: "Filter by message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
     required: false,
   })
   @IsOptional()

@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsInt,
   Min,
+  Max,
   IsArray,
   IsEnum,
 } from "class-validator";
@@ -15,7 +16,7 @@ import { DateFilterDto } from "../common/dto/date-filter.dto";
 export class MessageTypeDto {
   @ApiProperty({
     description: "Message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   @IsString()
   @IsNotEmpty()
@@ -37,7 +38,7 @@ export class MessageResponseDto {
 
   @ApiProperty({
     description: "Message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   type: string;
 
@@ -125,11 +126,12 @@ export class MessageListDto extends DateFilterDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(100)
   limit?: number = 20;
 
   @ApiProperty({
     description: "Filter by message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
     required: false,
   })
   @IsOptional()
@@ -167,8 +169,8 @@ export class MessageListDto extends DateFilterDto {
   @ApiProperty({
     description: "Filter by multiple message types",
     example: [
-      "/cosmos.bank.v1beta1.MsgSend",
-      "/cosmos.staking.v1beta1.MsgDelegate",
+      "cosmos.bank.v1beta1.MsgSend",
+      "cosmos.staking.v1beta1.MsgDelegate",
     ],
     required: false,
   })
@@ -240,7 +242,7 @@ export class MessageListDto extends DateFilterDto {
 export class MessageTypeInfoDto {
   @ApiProperty({
     description: "Message type identifier",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   type: string;
 
@@ -310,7 +312,7 @@ export class MessageStatisticsDto {
 
   @ApiProperty({
     description: "Most common message type",
-    example: "/cosmos.bank.v1beta1.MsgSend",
+    example: "cosmos.bank.v1beta1.MsgSend",
   })
   most_common_type: string;
 
