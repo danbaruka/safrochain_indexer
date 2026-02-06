@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import {
   Repository,
@@ -24,6 +25,11 @@ import {
 } from "../../dto/transaction-filter.dto";
 import { MessageParserService } from "../../common/services/message-parser.service";
 import { serializeDates } from "../../common/utils/date-serializer.util";
+import {
+  buildPaginationMeta,
+  normalizeOffsetPagination,
+  normalizePagePagination,
+} from "../../common/utils/pagination.util";
 
 @Injectable()
 export class TransactionService {
@@ -34,7 +40,8 @@ export class TransactionService {
     private messageRepository: Repository<Message>,
     @InjectRepository(Block)
     private blockRepository: Repository<Block>,
-    private messageParserService: MessageParserService
+    private messageParserService: MessageParserService,
+    private configService: ConfigService
   ) {}
 
   async getTransactionByHash(hash: string): Promise<TransactionResponseDto> {
@@ -137,15 +144,16 @@ export class TransactionService {
 
     // Apply filters
     if (filters.address) {
-      queryBuilder.andWhere("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${filters.address}%`,
-      });
+      queryBuilder.andWhere(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address: filters.address }
+      );
     }
 
     if (filters.message_type) {
       queryBuilder.andWhere(
-        "transaction.messages::text LIKE :messageTypePattern",
-        { messageTypePattern: `%"@type":"${filters.message_type}"%` }
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.type = :messageType)",
+        { messageType: filters.message_type }
       );
     }
 
@@ -155,11 +163,16 @@ export class TransactionService {
       });
     }
 
-    // Apply pagination
-    const offset = ((filters.page || 1) - 1) * (filters.limit || 20);
-    queryBuilder.offset(offset).limit(filters.limit || 20);
+    const { page, limit, offset } = normalizePagePagination(
+      filters,
+      this.configService
+    );
+    queryBuilder.offset(offset).limit(limit);
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
+    const messageMap = await this.preloadMessagesByHash(
+      transactions.map((transaction) => transaction.hash)
+    );
 
     // Process transactions for response
     const processedTransactions = await Promise.all(
@@ -184,12 +197,7 @@ export class TransactionService {
             );
           });
         } else {
-          // Fallback to message table
-          const dbMessages = await this.messageRepository.find({
-            where: { transaction_hash: transaction.hash },
-            order: { index: "ASC" },
-          });
-
+          const dbMessages = messageMap.get(transaction.hash) || [];
           messages = dbMessages.map((message) => ({
             type: message.type,
             value: message.value,
@@ -239,14 +247,7 @@ export class TransactionService {
 
     return {
       data: processedTransactions,
-      meta: {
-        page: filters.page || 1,
-        limit: filters.limit || 20,
-        total,
-        totalPages: Math.ceil(total / (filters.limit || 20)),
-        hasNext: (filters.page || 1) < Math.ceil(total / (filters.limit || 20)),
-        hasPrev: (filters.page || 1) > 1,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -329,25 +330,24 @@ export class TransactionService {
       filters.sort_order || TransactionSortOrder.DESC
     );
 
-    // Apply pagination
-    queryBuilder.limit(filters.limit || 20).offset(filters.offset || 0);
+    const { page, limit, offset } = normalizeOffsetPagination(
+      filters,
+      this.configService
+    );
+    queryBuilder.limit(limit).offset(offset);
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
 
+    const messageMap = await this.preloadMessagesByHash(
+      transactions.map((tx) => tx.hash)
+    );
     const processedTransactions = await Promise.all(
-      transactions.map((tx) => this.processTransactionResponse(tx))
+      transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );
 
     return {
       data: processedTransactions,
-      meta: {
-        total,
-        limit: filters.limit || 20,
-        page: Math.floor((filters.offset || 0) / (filters.limit || 20)) + 1,
-        totalPages: Math.ceil(total / (filters.limit || 20)),
-        hasNext: (filters.offset || 0) + (filters.limit || 20) < total,
-        hasPrev: (filters.offset || 0) > 0,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -367,27 +367,24 @@ export class TransactionService {
       );
     }
 
-    queryBuilder
-      .orderBy("transaction.height", "DESC")
-      .limit(search.limit || 20)
-      .offset(search.offset || 0);
+    const { page, limit, offset } = normalizeOffsetPagination(
+      search,
+      this.configService
+    );
+    queryBuilder.orderBy("transaction.height", "DESC").limit(limit).offset(offset);
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
 
+    const messageMap = await this.preloadMessagesByHash(
+      transactions.map((tx) => tx.hash)
+    );
     const processedTransactions = await Promise.all(
-      transactions.map((tx) => this.processTransactionResponse(tx))
+      transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );
 
     return {
       data: processedTransactions,
-      meta: {
-        total,
-        limit: search.limit || 20,
-        page: Math.floor((search.offset || 0) / (search.limit || 20)) + 1,
-        totalPages: Math.ceil(total / (search.limit || 20)),
-        hasNext: (search.offset || 0) + (search.limit || 20) < total,
-        hasPrev: (search.offset || 0) > 0,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -397,6 +394,9 @@ export class TransactionService {
     limit: number = 20,
     offset: number = 0
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
+    const { page, limit: safeLimit, offset: safeOffset } =
+      normalizeOffsetPagination({ limit, offset }, this.configService);
+
     const queryBuilder = this.transactionRepository
       .createQueryBuilder("transaction")
       .leftJoinAndSelect("transaction.block", "block")
@@ -406,25 +406,21 @@ export class TransactionService {
       )
       .setParameter("messageType", messageType)
       .orderBy("transaction.height", "DESC")
-      .limit(limit)
-      .offset(offset);
+      .limit(safeLimit)
+      .offset(safeOffset);
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
 
+    const messageMap = await this.preloadMessagesByHash(
+      transactions.map((tx) => tx.hash)
+    );
     const processedTransactions = await Promise.all(
-      transactions.map((tx) => this.processTransactionResponse(tx))
+      transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );
 
     return {
       data: processedTransactions,
-      meta: {
-        total,
-        limit,
-        page: Math.floor(offset / limit) + 1,
-        totalPages: Math.ceil(total / limit),
-        hasNext: offset + limit < total,
-        hasPrev: offset > 0,
-      },
+      meta: buildPaginationMeta(page, safeLimit, total),
     };
   }
 
@@ -434,6 +430,9 @@ export class TransactionService {
     limit: number = 20,
     offset: number = 0
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
+    const { page, limit: safeLimit, offset: safeOffset } =
+      normalizeOffsetPagination({ limit, offset }, this.configService);
+
     const queryBuilder = this.transactionRepository
       .createQueryBuilder("transaction")
       .leftJoinAndSelect("transaction.block", "block")
@@ -443,25 +442,21 @@ export class TransactionService {
       )
       .setParameter("validatorAddress", validatorAddress)
       .orderBy("transaction.height", "DESC")
-      .limit(limit)
-      .offset(offset);
+      .limit(safeLimit)
+      .offset(safeOffset);
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
 
+    const messageMap = await this.preloadMessagesByHash(
+      transactions.map((tx) => tx.hash)
+    );
     const processedTransactions = await Promise.all(
-      transactions.map((tx) => this.processTransactionResponse(tx))
+      transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );
 
     return {
       data: processedTransactions,
-      meta: {
-        total,
-        limit,
-        page: Math.floor(offset / limit) + 1,
-        totalPages: Math.ceil(total / limit),
-        hasNext: offset + limit < total,
-        hasPrev: offset > 0,
-      },
+      meta: buildPaginationMeta(page, safeLimit, total),
     };
   }
 
@@ -472,31 +467,30 @@ export class TransactionService {
     limit: number = 20,
     offset: number = 0
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
+    const { page: rangePage, limit: rangeLimit, offset: rangeOffset } =
+      normalizeOffsetPagination({ limit, offset }, this.configService);
+
     const queryBuilder = this.transactionRepository
       .createQueryBuilder("transaction")
       .leftJoinAndSelect("transaction.block", "block")
       .where("transaction.height BETWEEN :minHeight AND :maxHeight")
       .setParameters({ minHeight, maxHeight })
       .orderBy("transaction.height", "DESC")
-      .limit(limit)
-      .offset(offset);
+      .limit(rangeLimit)
+      .offset(rangeOffset);
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
 
+    const messageMap = await this.preloadMessagesByHash(
+      transactions.map((tx) => tx.hash)
+    );
     const processedTransactions = await Promise.all(
-      transactions.map((tx) => this.processTransactionResponse(tx))
+      transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );
 
     return {
       data: processedTransactions,
-      meta: {
-        total,
-        limit,
-        page: Math.floor(offset / limit) + 1,
-        totalPages: Math.ceil(total / limit),
-        hasNext: offset + limit < total,
-        hasPrev: offset > 0,
-      },
+      meta: buildPaginationMeta(rangePage, rangeLimit, total),
     };
   }
 
@@ -686,8 +680,31 @@ export class TransactionService {
     }
   }
 
+  private async preloadMessagesByHash(
+    hashes: string[]
+  ): Promise<Map<string, Message[]>> {
+    if (hashes.length === 0) {
+      return new Map();
+    }
+
+    const messages = await this.messageRepository.find({
+      where: { transaction_hash: In(hashes) },
+      order: { index: "ASC" },
+    });
+
+    const messageMap = new Map<string, Message[]>();
+    messages.forEach((message) => {
+      const list = messageMap.get(message.transaction_hash) || [];
+      list.push(message);
+      messageMap.set(message.transaction_hash, list);
+    });
+
+    return messageMap;
+  }
+
   private async processTransactionResponse(
-    transaction: Transaction
+    transaction: Transaction,
+    messageMap?: Map<string, Message[]>
   ): Promise<TransactionResponseDto> {
     // Get messages from transaction JSON or message table
     let messages: any[] = [];
@@ -709,11 +726,13 @@ export class TransactionService {
         );
       });
     } else {
-      // Fallback to message table
-      const dbMessages = await this.messageRepository.find({
-        where: { transaction_hash: transaction.hash },
-        order: { index: "ASC" },
-      });
+      // Fallback to message table (prefer preloaded map)
+      const dbMessages =
+        messageMap?.get(transaction.hash) ??
+        (await this.messageRepository.find({
+          where: { transaction_hash: transaction.hash },
+          order: { index: "ASC" },
+        }));
 
       messages = dbMessages.map((message) => ({
         type: message.type,

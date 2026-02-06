@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, SelectQueryBuilder } from "typeorm";
 import { Account } from "../../entities/account.entity";
@@ -20,6 +21,11 @@ import {
 import { PaginatedResponseDto } from "../../common/dto/pagination.dto";
 import { MessageParserService } from "../../common/services/message-parser.service";
 import { serializeDates } from "../../common/utils/date-serializer.util";
+import {
+  buildPaginationMeta,
+  normalizeOffsetPagination,
+  normalizePagePagination,
+} from "../../common/utils/pagination.util";
 
 @Injectable()
 export class AddressService {
@@ -38,7 +44,8 @@ export class AddressService {
     private proposalDepositRepository: Repository<ProposalDeposit>,
     @InjectRepository(ProposalVote)
     private proposalVoteRepository: Repository<ProposalVote>,
-    private messageParserService: MessageParserService
+    private messageParserService: MessageParserService,
+    private configService: ConfigService
   ) {}
 
   async getAddressInfo(address: string): Promise<AddressResponseDto> {
@@ -91,15 +98,20 @@ export class AddressService {
 
   async getAddressTransactions(address: string, pagination: PaginationDto) {
     // Query transactions that contain the address in their messages JSON
+    const { page, limit, offset } = normalizePagePagination(
+      pagination,
+      this.configService
+    );
     const queryBuilder = this.transactionRepository
       .createQueryBuilder("transaction")
       .leftJoinAndSelect("transaction.block", "block")
-      .where("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${address}%`,
-      })
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      )
       .orderBy("transaction.height", "DESC")
-      .offset(pagination.offset)
-      .limit(pagination.limit || 20);
+      .offset(offset)
+      .limit(limit);
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
 
@@ -150,20 +162,12 @@ export class AddressService {
 
     return {
       data: processedTransactions,
-      meta: {
-        page: pagination.page || 1,
-        limit: pagination.limit || 20,
-        total,
-        totalPages: Math.ceil(total / (pagination.limit || 20)),
-        hasNext:
-          (pagination.page || 1) < Math.ceil(total / (pagination.limit || 20)),
-        hasPrev: (pagination.page || 1) > 1,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
   private async getTransactionStatistics(address: string) {
-    // Query transactions that contain the address in their messages JSON
+    // Query transactions that contain the address using the message table
     const query = `
       SELECT 
         COUNT(*) as total_transactions,
@@ -172,21 +176,25 @@ export class AddressService {
         COUNT(CASE WHEN t.success = true THEN 1 END) as successful_transactions,
         COUNT(CASE WHEN t.success = false THEN 1 END) as failed_transactions
       FROM transaction t
-      WHERE t.messages::text LIKE $1
+      WHERE EXISTS (
+        SELECT 1 FROM message m
+        WHERE m.transaction_hash = t.hash
+          AND m.partition_id = t.partition_id
+          AND $1 = ANY(m.involved_accounts_addresses)
+      )
     `;
 
-    const result = await this.transactionRepository.query(query, [
-      `%${address}%`,
-    ]);
+    const result = await this.transactionRepository.query(query, [address]);
     const stats = result[0];
 
     // Get first and last transaction timestamps
     const firstTx = await this.transactionRepository
       .createQueryBuilder("transaction")
       .leftJoinAndSelect("transaction.block", "block")
-      .where("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${address}%`,
-      })
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      )
       .orderBy("transaction.height", "ASC")
       .limit(1)
       .getOne();
@@ -194,9 +202,10 @@ export class AddressService {
     const lastTx = await this.transactionRepository
       .createQueryBuilder("transaction")
       .leftJoinAndSelect("transaction.block", "block")
-      .where("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${address}%`,
-      })
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      )
       .orderBy("transaction.height", "DESC")
       .limit(1)
       .getOne();
@@ -219,9 +228,10 @@ export class AddressService {
     const transactions = await this.transactionRepository
       .createQueryBuilder("transaction")
       .leftJoinAndSelect("transaction.block", "block")
-      .where("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${address}%`,
-      })
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      )
       .orderBy("transaction.height", "DESC")
       .limit(limit)
       .getMany();
@@ -294,17 +304,19 @@ export class AddressService {
   }
 
   private getMessageType(type: string): string {
+    // Strip leading slash if present for compatibility
+    const normalizedType = type.startsWith("/") ? type.slice(1) : type;
     const typeMap: { [key: string]: string } = {
-      "/cosmos.bank.v1beta1.MsgSend": "send",
-      "/cosmos.bank.v1beta1.MsgMultiSend": "multi_send",
-      "/cosmos.staking.v1beta1.MsgDelegate": "delegate",
-      "/cosmos.staking.v1beta1.MsgUndelegate": "undelegate",
-      "/cosmos.staking.v1beta1.MsgBeginRedelegate": "redelegate",
-      "/cosmos.gov.v1beta1.MsgSubmitProposal": "submit_proposal",
-      "/cosmos.gov.v1beta1.MsgVote": "vote",
-      "/cosmos.gov.v1beta1.MsgDeposit": "deposit",
+      "cosmos.bank.v1beta1.MsgSend": "send",
+      "cosmos.bank.v1beta1.MsgMultiSend": "multi_send",
+      "cosmos.staking.v1beta1.MsgDelegate": "delegate",
+      "cosmos.staking.v1beta1.MsgUndelegate": "undelegate",
+      "cosmos.staking.v1beta1.MsgBeginRedelegate": "redelegate",
+      "cosmos.gov.v1beta1.MsgSubmitProposal": "submit_proposal",
+      "cosmos.gov.v1beta1.MsgVote": "vote",
+      "cosmos.gov.v1beta1.MsgDeposit": "deposit",
     };
-    return typeMap[type] || "unknown";
+    return typeMap[normalizedType] || "unknown";
   }
 
   private extractAddressesFromMessage(message: any): string[] {
@@ -371,13 +383,14 @@ export class AddressService {
   private extractAmountFromMessage(value: any, type: string): any[] {
     if (!value) return [];
 
-    switch (type) {
-      case "/cosmos.bank.v1beta1.MsgSend":
+    const normalizedType = type.startsWith("/") ? type.slice(1) : type;
+    switch (normalizedType) {
+      case "cosmos.bank.v1beta1.MsgSend":
         return value.amount || [];
-      case "/cosmos.staking.v1beta1.MsgDelegate":
-      case "/cosmos.staking.v1beta1.MsgUndelegate":
+      case "cosmos.staking.v1beta1.MsgDelegate":
+      case "cosmos.staking.v1beta1.MsgUndelegate":
         return value.amount ? [value.amount] : [];
-      case "/cosmos.gov.v1beta1.MsgDeposit":
+      case "cosmos.gov.v1beta1.MsgDeposit":
         return value.amount || [];
       default:
         return [];
@@ -400,8 +413,11 @@ export class AddressService {
       filters.sort_order || AddressTransactionSortOrder.DESC
     );
 
-    // Apply pagination
-    queryBuilder.limit(filters.limit || 20).offset(filters.offset || 0);
+    const { page, limit, offset } = normalizeOffsetPagination(
+      filters,
+      this.configService
+    );
+    queryBuilder.limit(limit).offset(offset);
 
     const [transactions, total] = await queryBuilder.getManyAndCount();
 
@@ -413,14 +429,7 @@ export class AddressService {
 
     return {
       data: processedTransactions,
-      meta: {
-        total,
-        limit: filters.limit || 20,
-        page: Math.floor((filters.offset || 0) / (filters.limit || 20)) + 1,
-        totalPages: Math.ceil(total / (filters.limit || 20)),
-        hasNext: (filters.offset || 0) + (filters.limit || 20) < total,
-        hasPrev: (filters.offset || 0) > 0,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -488,9 +497,10 @@ export class AddressService {
     const queryBuilder = this.transactionRepository
       .createQueryBuilder("transaction")
       .leftJoinAndSelect("transaction.block", "block")
-      .where("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${address}%`,
-      });
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      );
 
     // Apply filters
     if (filters.success !== undefined) {
@@ -542,26 +552,16 @@ export class AddressService {
     }
 
     if (filters.message_types && filters.message_types.length > 0) {
-      const messageTypePatterns = filters.message_types.map(
-        (type) => `%"@type":"${type}"%`
-      );
       queryBuilder.andWhere(
-        `(${messageTypePatterns
-          .map(() => "transaction.messages::text LIKE ?")
-          .join(" OR ")})`,
-        messageTypePatterns
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.type = ANY(:messageTypes))",
+        { messageTypes: filters.message_types }
       );
     }
 
     if (filters.modules && filters.modules.length > 0) {
-      const modulePatterns = filters.modules.map(
-        (module) => `%"@type":"%${module}%"%`
-      );
       queryBuilder.andWhere(
-        `(${modulePatterns
-          .map(() => "transaction.messages::text LIKE ?")
-          .join(" OR ")})`,
-        modulePatterns
+        "EXISTS (SELECT 1 FROM message m JOIN message_type mt ON mt.type = m.type WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND mt.module = ANY(:modules))",
+        { modules: filters.modules }
       );
     }
 
@@ -569,34 +569,36 @@ export class AddressService {
       switch (filters.direction) {
         case "sent":
           queryBuilder.andWhere(
-            "transaction.messages::text LIKE :addressPattern",
-            { addressPattern: `%"from_address":"${address}"%` }
+            "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.value->>'from_address' = :address)",
+            { address }
           );
           break;
         case "received":
           queryBuilder.andWhere(
-            "transaction.messages::text LIKE :addressPattern",
-            { addressPattern: `%"to_address":"${address}"%` }
+            "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.value->>'to_address' = :address)",
+            { address }
           );
           break;
       }
     }
 
     if (filters.sender_only) {
-      queryBuilder.andWhere("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%"from_address":"${address}"%`,
-      });
+      queryBuilder.andWhere(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.value->>'from_address' = :address)",
+        { address }
+      );
     }
 
     if (filters.receiver_only) {
-      queryBuilder.andWhere("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%"to_address":"${address}"%`,
-      });
+      queryBuilder.andWhere(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.value->>'to_address' = :address)",
+        { address }
+      );
     }
 
     if (filters.search) {
       queryBuilder.andWhere(
-        "(transaction.hash ILIKE :search OR transaction.memo ILIKE :search OR transaction.messages::text ILIKE :search)",
+        "(transaction.hash ILIKE :search OR transaction.memo ILIKE :search OR EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.value::text ILIKE :search))",
         { search: `%${filters.search}%` }
       );
     }
@@ -839,9 +841,10 @@ export class AddressService {
   ): Promise<number> {
     const queryBuilder = this.transactionRepository
       .createQueryBuilder("transaction")
-      .where("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${address}%`,
-      });
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      );
 
     if (filters.success !== undefined) {
       queryBuilder.andWhere("transaction.success = :success", {
@@ -860,9 +863,10 @@ export class AddressService {
         "SUM(transaction.gas_wanted) as total_gas_wanted",
         "AVG(transaction.gas_used::float / NULLIF(transaction.gas_wanted, 0)) as avg_efficiency",
       ])
-      .where("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${address}%`,
-      })
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      )
       .getRawOne();
 
     return {
@@ -886,32 +890,18 @@ export class AddressService {
     const [sent, received, both] = await Promise.all([
       this.transactionRepository
         .createQueryBuilder("transaction")
-        .leftJoin("transaction.messages_entities", "message")
         .where(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND :address = ANY(m.involved_accounts_addresses))"
+          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.value->>'from_address' = :address)",
+          { address }
         )
-        .andWhere(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.value::text LIKE :addressPattern)"
-        )
-        .setParameters({
-          address,
-          addressPattern: `%"from_address":"${address}"%`,
-        })
         .getCount(),
 
       this.transactionRepository
         .createQueryBuilder("transaction")
-        .leftJoin("transaction.messages_entities", "message")
         .where(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND :address = ANY(m.involved_accounts_addresses))"
+          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.value->>'to_address' = :address)",
+          { address }
         )
-        .andWhere(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.value::text LIKE :addressPattern)"
-        )
-        .setParameters({
-          address,
-          addressPattern: `%"to_address":"${address}"%`,
-        })
         .getCount(),
 
       this.transactionRepository
@@ -961,9 +951,10 @@ export class AddressService {
       .leftJoin("transaction.block", "block")
       .select("DATE(block.timestamp)", "date")
       .addSelect("COUNT(*)", "count")
-      .where("transaction.messages::text LIKE :addressPattern", {
-        addressPattern: `%${address}%`,
-      })
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      )
       .groupBy("DATE(block.timestamp)")
       .orderBy("date", "DESC")
       .limit(30)

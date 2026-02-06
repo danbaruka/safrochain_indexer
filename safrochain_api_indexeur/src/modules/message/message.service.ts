@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, SelectQueryBuilder } from "typeorm";
 import { Message } from "../../entities/message.entity";
@@ -13,6 +14,10 @@ import {
 } from "../../dto/message.dto";
 import { PaginatedResponseDto } from "../../common/dto/pagination.dto";
 import { MessageCategory } from "../../common/types/message.type";
+import {
+  buildPaginationMeta,
+  normalizePagePagination,
+} from "../../common/utils/pagination.util";
 
 @Injectable()
 export class MessageService {
@@ -22,7 +27,8 @@ export class MessageService {
     @InjectRepository(MessageType)
     private messageTypeRepository: Repository<MessageType>,
     private messageParserService: MessageParserService,
-    private dateFilterService: DateFilterService
+    private dateFilterService: DateFilterService,
+    private configService: ConfigService
   ) {}
 
   async getMessages(
@@ -112,9 +118,11 @@ export class MessageService {
       "message.timestamp"
     );
 
-    // Apply pagination
-    const offset = ((filters.page || 1) - 1) * (filters.limit || 20);
-    queryBuilder.offset(offset).limit(filters.limit || 20);
+    const { page, limit, offset } = normalizePagePagination(
+      filters,
+      this.configService
+    );
+    queryBuilder.offset(offset).limit(limit);
 
     const [messages, total] = await queryBuilder.getManyAndCount();
 
@@ -144,14 +152,7 @@ export class MessageService {
 
     return {
       data: processedMessages,
-      meta: {
-        page: filters.page || 1,
-        limit: filters.limit || 20,
-        total,
-        totalPages: Math.ceil(total / (filters.limit || 20)),
-        hasNext: (filters.page || 1) < Math.ceil(total / (filters.limit || 20)),
-        hasPrev: (filters.page || 1) > 1,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -294,8 +295,11 @@ export class MessageService {
       .where(":address = ANY(message.involved_accounts_addresses)", { address })
       .orderBy("message.height", "DESC");
 
-    const offset = ((pagination.page || 1) - 1) * (pagination.limit || 20);
-    queryBuilder.offset(offset).limit(pagination.limit || 20);
+    const { page, limit, offset } = normalizePagePagination(
+      pagination,
+      this.configService
+    );
+    queryBuilder.offset(offset).limit(limit);
 
     const [messages, total] = await queryBuilder.getManyAndCount();
 
@@ -324,15 +328,7 @@ export class MessageService {
 
     return {
       data: processedMessages,
-      meta: {
-        page: pagination.page || 1,
-        limit: pagination.limit || 20,
-        total,
-        totalPages: Math.ceil(total / (pagination.limit || 20)),
-        hasNext:
-          (pagination.page || 1) < Math.ceil(total / (pagination.limit || 20)),
-        hasPrev: (pagination.page || 1) > 1,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -345,8 +341,11 @@ export class MessageService {
       .where("message.type = :type", { type })
       .orderBy("message.height", "DESC");
 
-    const offset = ((pagination.page || 1) - 1) * (pagination.limit || 20);
-    queryBuilder.offset(offset).limit(pagination.limit || 20);
+    const { page, limit, offset } = normalizePagePagination(
+      pagination,
+      this.configService
+    );
+    queryBuilder.offset(offset).limit(limit);
 
     const [messages, total] = await queryBuilder.getManyAndCount();
 
@@ -375,15 +374,7 @@ export class MessageService {
 
     return {
       data: processedMessages,
-      meta: {
-        page: pagination.page || 1,
-        limit: pagination.limit || 20,
-        total,
-        totalPages: Math.ceil(total / (pagination.limit || 20)),
-        hasNext:
-          (pagination.page || 1) < Math.ceil(total / (pagination.limit || 20)),
-        hasPrev: (pagination.page || 1) > 1,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
@@ -399,8 +390,11 @@ export class MessageService {
       )
       .orderBy("message.height", "DESC");
 
-    const offset = ((pagination.page || 1) - 1) * (pagination.limit || 20);
-    queryBuilder.offset(offset).limit(pagination.limit || 20);
+    const { page, limit, offset } = normalizePagePagination(
+      pagination,
+      this.configService
+    );
+    queryBuilder.offset(offset).limit(limit);
 
     const [messages, total] = await queryBuilder.getManyAndCount();
 
@@ -429,15 +423,7 @@ export class MessageService {
 
     return {
       data: processedMessages,
-      meta: {
-        page: pagination.page || 1,
-        limit: pagination.limit || 20,
-        total,
-        totalPages: Math.ceil(total / (pagination.limit || 20)),
-        hasNext:
-          (pagination.page || 1) < Math.ceil(total / (pagination.limit || 20)),
-        hasPrev: (pagination.page || 1) > 1,
-      },
+      meta: buildPaginationMeta(page, limit, total),
     };
   }
 
