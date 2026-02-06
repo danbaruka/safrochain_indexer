@@ -5,10 +5,11 @@ chain:
   # List of Cosmos SDK modules to enable (order matters)
   modules:
     - modules # Must always come first
-    - messages # Must come immediately after modules
+    - message_type # Must run before messages to satisfy message_type FK
+    - messages # Keep near the top for tx/message parsing
     - auth # Parse accounts, signatures, authorizations
     - bank # Parse balances, transfers
-    - consensus # Parse consensus params and stats
+    # - consensus # Disable unless genesis is parsed
     - staking # Parse validators, delegations
     - distribution # Parse rewards, commissions (must come after staking)
     - feegrant # Parse fee grants
@@ -26,19 +27,22 @@ node:
   config:
     rpc:
       client_name: safrochain
-      address: http://localhost:26657
+      # CometBFT RPC: HTTP on 26657
+      address: http://88.99.211.113:26657
       max_connections: 20
     grpc:
-      address: http://localhost:9090
+      # gRPC: host:port only
+      address: 88.99.211.113:9090
       insecure: true
 
 parsing:
-  workers: 2 # Number of workers for block parsing
-  start_height: 1 # Start from block 1
+  workers: 1 # Use 1 worker to avoid race conditions
+  # Node has pruned old state; only index new blocks going forward.
+  start_height: 1
   average_block_time: 5s # Adjust to your chain’s block time
   listen_new_blocks: true
-  parse_old_blocks: true
-  parse_genesis: true
+  parse_old_blocks: false # Node has pruned old blocks; don't backfill
+  parse_genesis: false    # Node doesn't serve genesis state
   fast_sync: false
 
 database:
@@ -70,7 +74,7 @@ actions:
   port: 3000
   node:
     rpc:
-      address: http://localhost:26657
+      address: http://88.99.211.113:26657
     grpc:
-      address: http://localhost:9090
+      address: 88.99.211.113:9090
       insecure: true
