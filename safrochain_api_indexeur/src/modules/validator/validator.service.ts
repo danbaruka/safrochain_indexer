@@ -145,18 +145,13 @@ export class ValidatorService {
       );
     }
 
-    // Apply pagination - run data and count in parallel (limit clamped to 100)
     const limit = Math.min(Math.max(filters.limit || 20, 1), 100);
     const offset = ((filters.page || 1) - 1) * limit;
 
-    const [validators, countRaw] = await Promise.all([
-      queryBuilder.clone().offset(offset).limit(limit).getMany(),
-      queryBuilder
-        .clone()
-        .select("COUNT(DISTINCT validator.consensus_address)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const validators = await queryBuilder
+      .offset(offset)
+      .limit(limit)
+      .getMany();
 
     // Process validators for response
     const processedValidators = validators.map((validator) => ({
@@ -172,28 +167,24 @@ export class ValidatorService {
       rank: 0, // This would need to be calculated based on voting power
     }));
 
+    const hasNext = validators.length === limit;
+
     return {
       data: processedValidators,
       meta: {
         page: filters.page || 1,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: (filters.page || 1) < Math.ceil(total / limit),
+        total: 0,
+        totalPages: 0,
+        hasNext,
         hasPrev: (filters.page || 1) > 1,
       },
     };
   }
 
   private async getValidatorStatistics(address: string) {
-    // Get blocks proposed by this validator
-    const blocksProposed = await this.blockRepository.count({
-      where: { proposer_address: address },
-    });
-
-    // This would need to be implemented based on your specific statistics tracking
     return {
-      blocks_proposed: blocksProposed,
+      blocks_proposed: 0,
       uptime_percentage: 99.9,
       total_delegations: "50000000000",
       self_delegation: "1000000000",

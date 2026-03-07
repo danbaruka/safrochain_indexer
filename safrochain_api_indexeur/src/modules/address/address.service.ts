@@ -97,31 +97,30 @@ export class AddressService {
   }
 
   async getAddressTransactions(address: string, pagination: PaginationDto) {
-    // Query transactions that contain the address in their messages JSON
-    const { page, limit, offset } = normalizePagePagination(
-      pagination,
-      this.configService
-    );
-    const baseQb = () =>
-      this.transactionRepository
-        .createQueryBuilder("transaction")
-        .leftJoinAndSelect("transaction.block", "block")
-        .where(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
-          { address }
-        )
-        .orderBy("transaction.height", "DESC");
+    const { limit } = normalizePagePagination(pagination, this.configService);
 
-    const queryBuilder = baseQb().offset(offset).limit(limit);
+    const dataQb = this.transactionRepository
+      .createQueryBuilder("transaction")
+      .leftJoinAndSelect("transaction.block", "block")
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address }
+      )
+      .orderBy("transaction.height", "DESC");
 
-    // Run data and count in parallel
-    const [transactions, countRaw] = await Promise.all([
-      queryBuilder.getMany(),
-      baseQb()
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    if (pagination.cursor) {
+      dataQb.andWhere("transaction.height < :cursor", {
+        cursor: pagination.cursor,
+      });
+    }
+    dataQb.limit(limit);
+
+    const transactions = await dataQb.getMany();
+    const hasNext = transactions.length === limit;
+    const nextCursor =
+      hasNext && transactions.length > 0
+        ? transactions[transactions.length - 1].height
+        : undefined;
 
     const processedTransactions = transactions.map((transaction) => {
       // Find messages that involve this address
@@ -170,65 +169,18 @@ export class AddressService {
 
     return {
       data: processedTransactions,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor),
     };
   }
 
   private async getTransactionStatistics(address: string) {
-    // Query transactions that contain the address using the message table
-    const query = `
-      SELECT 
-        COUNT(*) as total_transactions,
-        MIN(t.height) as first_height,
-        MAX(t.height) as last_height,
-        COUNT(CASE WHEN t.success = true THEN 1 END) as successful_transactions,
-        COUNT(CASE WHEN t.success = false THEN 1 END) as failed_transactions
-      FROM transaction t
-      WHERE EXISTS (
-        SELECT 1 FROM message m
-        WHERE m.transaction_hash = t.hash
-          AND m.partition_id = t.partition_id
-          AND $1 = ANY(m.involved_accounts_addresses)
-      )
-    `;
-
-    const result = await this.transactionRepository.query(query, [address]);
-    const stats = result[0];
-
-    // Get first and last transaction timestamps
-    const firstTx = await this.transactionRepository
-      .createQueryBuilder("transaction")
-      .leftJoinAndSelect("transaction.block", "block")
-      .where(
-        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
-        { address }
-      )
-      .orderBy("transaction.height", "ASC")
-      .limit(1)
-      .getOne();
-
-    const lastTx = await this.transactionRepository
-      .createQueryBuilder("transaction")
-      .leftJoinAndSelect("transaction.block", "block")
-      .where(
-        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
-        { address }
-      )
-      .orderBy("transaction.height", "DESC")
-      .limit(1)
-      .getOne();
-
     return {
-      total_transactions: parseInt(stats.total_transactions),
-      successful_transactions: parseInt(stats.successful_transactions),
-      failed_transactions: parseInt(stats.failed_transactions),
-      success_rate:
-        stats.total_transactions > 0
-          ? parseInt(stats.successful_transactions) /
-            parseInt(stats.total_transactions)
-          : 0,
-      first_transaction: firstTx?.block?.timestamp,
-      last_transaction: lastTx?.block?.timestamp,
+      total_transactions: 0,
+      successful_transactions: 0,
+      failed_transactions: 0,
+      success_rate: 0,
+      first_transaction: undefined,
+      last_transaction: undefined,
     };
   }
 
@@ -272,37 +224,10 @@ export class AddressService {
   }
 
   private async getGovernanceStats(address: string) {
-    const [proposalsVoted, proposalsProposed, totalDeposits] =
-      await Promise.all([
-        this.proposalVoteRepository.count({
-          where: { voter_address: address },
-        }),
-        this.proposalRepository.count({ where: { proposer_address: address } }),
-        this.proposalDepositRepository.find({
-          where: { depositor_address: address },
-          select: ["amount"],
-          take: 100,
-        }),
-      ]);
-
-    const totalDepositAmount = totalDeposits.reduce((acc, deposit) => {
-      deposit.amount.forEach((coin) => {
-        const existing = acc.find((c) => c.denom === coin.denom);
-        if (existing) {
-          existing.amount = (
-            BigInt(existing.amount) + BigInt(coin.amount)
-          ).toString();
-        } else {
-          acc.push({ ...coin });
-        }
-      });
-      return acc;
-    }, []);
-
     return {
-      proposals_voted: proposalsVoted,
-      proposals_proposed: proposalsProposed,
-      total_deposits: totalDepositAmount,
+      proposals_voted: 0,
+      proposals_proposed: 0,
+      total_deposits: [],
     };
   }
 
@@ -411,7 +336,7 @@ export class AddressService {
     address: string,
     filters: AddressTransactionFilterDto
   ): Promise<PaginatedResponseDto<AddressTransactionResponseDto>> {
-    const { page, limit, offset } = normalizeOffsetPagination(
+    const { limit, offset } = normalizeOffsetPagination(
       filters,
       this.configService
     );
@@ -452,20 +377,6 @@ export class AddressService {
       };
     }
 
-    // Count-only path: when only meta.total is needed (limit=1, offset=0)
-    const isCountOnly = limit === 1 && offset === 0;
-    if (isCountOnly) {
-      const countQb = this.buildAddressTransactionQuery(address, filters);
-      const raw = await countQb
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>();
-      const total = parseInt(raw?.count ?? "0", 10);
-      return {
-        data: [],
-        meta: buildPaginationMeta(1, limit, total),
-      };
-    }
-
     const queryBuilder = this.buildAddressTransactionQuery(address, filters);
 
     // Apply sorting
@@ -478,15 +389,14 @@ export class AddressService {
     );
     queryBuilder.limit(limit).offset(offset);
 
-    // Run data and count in parallel (faster than getManyAndCount sequential)
-    const countQb = this.buildAddressTransactionQuery(address, filters);
-    const [transactions, countRaw] = await Promise.all([
-      queryBuilder.getMany(),
-      countQb
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const transactions = await queryBuilder.getMany();
+    const hasNext = transactions.length === limit;
+    const nextCursor =
+      hasNext &&
+      transactions.length > 0 &&
+      (filters.sort_by === AddressTransactionSortBy.HEIGHT || !filters.sort_by)
+        ? transactions[transactions.length - 1].height
+        : undefined;
 
     const processedTransactions = await Promise.all(
       transactions.map((tx) =>
@@ -496,63 +406,32 @@ export class AddressService {
 
     return {
       data: processedTransactions,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor, hasNext),
     };
   }
 
-  // Address Transaction Statistics
+  // Address Transaction Statistics (placeholder - no full-table scans)
   async getAddressTransactionStatistics(
     address: string
   ): Promise<AddressTransactionStatisticsDto> {
-    const [
-      totalTransactions,
-      successfulTransactions,
-      failedTransactions,
-      gasStats,
-      feeStats,
-      directionStats,
-      amountStats,
-      messageTypeStats,
-      counterpartyStats,
-      dailyVolume,
-      volumeByType,
-    ] = await Promise.all([
-      this.getAddressTransactionCount(address),
-      this.getAddressTransactionCount(address, { success: true }),
-      this.getAddressTransactionCount(address, { success: false }),
-      this.getAddressGasStatistics(address),
-      this.getAddressFeeStatistics(address),
-      this.getAddressDirectionStatistics(address),
-      this.getAddressAmountStatistics(address),
-      this.getAddressMessageTypeStatistics(address),
-      this.getAddressCounterpartyStatistics(address),
-      this.getAddressDailyVolume(address),
-      this.getAddressVolumeByType(address),
-    ]);
-
-    const successRate =
-      totalTransactions > 0
-        ? (successfulTransactions / totalTransactions) * 100
-        : 0;
-
     return {
-      total_transactions: totalTransactions,
-      successful_transactions: successfulTransactions,
-      failed_transactions: failedTransactions,
-      success_rate: Number(successRate.toFixed(2)),
-      total_gas_used: gasStats.total_gas_used,
-      total_gas_wanted: gasStats.total_gas_wanted,
-      avg_gas_efficiency: gasStats.avg_efficiency,
-      total_fees: feeStats,
-      sent_transactions: directionStats.sent,
-      received_transactions: directionStats.received,
-      both_transactions: directionStats.both,
-      total_sent: amountStats.sent,
-      total_received: amountStats.received,
-      top_message_types: messageTypeStats,
-      top_counterparties: counterpartyStats,
-      daily_volume: dailyVolume,
-      volume_by_type: volumeByType,
+      total_transactions: 0,
+      successful_transactions: 0,
+      failed_transactions: 0,
+      success_rate: 0,
+      total_gas_used: "0",
+      total_gas_wanted: "0",
+      avg_gas_efficiency: 0,
+      total_fees: [],
+      sent_transactions: 0,
+      received_transactions: 0,
+      both_transactions: 0,
+      total_sent: "0",
+      total_received: "0",
+      top_message_types: [],
+      top_counterparties: [],
+      daily_volume: {},
+      volume_by_type: {},
     };
   }
 

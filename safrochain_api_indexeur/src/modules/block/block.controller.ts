@@ -125,6 +125,13 @@ export class BlockController {
     required: false,
   })
   @ApiQuery({
+    name: "cursor",
+    description:
+      "Cursor for pagination (block height). Use next_cursor from previous response.",
+    example: 12345,
+    required: false,
+  })
+  @ApiQuery({
     name: "proposer",
     description: "Filter by proposer address",
     example: "safrovalcons1abc123def456ghi789jkl012mno345pqr678stu",

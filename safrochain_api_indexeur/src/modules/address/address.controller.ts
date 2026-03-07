@@ -90,6 +90,13 @@ export class AddressController {
     example: 20,
     required: false,
   })
+  @ApiQuery({
+    name: "cursor",
+    description:
+      "Cursor for pagination (block height). Use next_cursor from previous response.",
+    example: 12345,
+    required: false,
+  })
   @ApiResponse({
     status: 200,
     description: "Address transactions retrieved successfully",

@@ -391,6 +391,20 @@ export class TransactionStatisticsDto {
   hourly_volume: Record<string, number>;
 }
 
+export class TransactionCountsDto {
+  @ApiProperty({
+    description: "Number of transactions in the last 24 hours",
+    example: 1250,
+  })
+  last_24h: number;
+
+  @ApiProperty({
+    description: "Number of transactions in the last 7 days",
+    example: 8750,
+  })
+  last_7d: number;
+}
+
 export class TransactionAnalyticsDto {
   @ApiProperty({
     description: "Transaction volume over time",

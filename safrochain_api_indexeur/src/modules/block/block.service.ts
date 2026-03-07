@@ -7,6 +7,7 @@ import { Validator } from "../../entities/validator.entity";
 import { BlockResponseDto, BlockListDto } from "../../dto/block.dto";
 import { PaginatedResponseDto } from "../../common/dto/pagination.dto";
 import { DateFilterService } from "../../common/services/date-filter.service";
+import { buildPaginationMeta } from "../../common/utils/pagination.util";
 import { serializeDates } from "../../common/utils/date-serializer.util";
 import { MessageParserService } from "../../common/services/message-parser.service";
 
@@ -126,20 +127,20 @@ export class BlockService {
       "block.timestamp"
     );
 
-    // Apply pagination - run data and count in parallel (limit clamped to 100)
     const limit = Math.min(Math.max(filters.limit || 20, 1), 100);
-    const offset = ((filters.page || 1) - 1) * limit;
 
-    const [blocks, countRaw] = await Promise.all([
-      queryBuilder.clone().offset(offset).limit(limit).getMany(),
-      queryBuilder
-        .clone()
-        .select("COUNT(*)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    if (filters.cursor) {
+      queryBuilder.andWhere("block.height < :cursor", {
+        cursor: filters.cursor,
+      });
+    }
+    queryBuilder.orderBy("block.height", "DESC").limit(limit);
 
-    // Process blocks for response
+    const blocks = await queryBuilder.getMany();
+    const hasNext = blocks.length === limit;
+    const nextCursor =
+      hasNext && blocks.length > 0 ? blocks[blocks.length - 1].height : undefined;
+
     const processedBlocks = blocks.map((block) => ({
       height: block.height,
       hash: block.hash,
@@ -158,14 +159,7 @@ export class BlockService {
 
     return {
       data: processedBlocks,
-      meta: {
-        page: filters.page || 1,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: (filters.page || 1) < Math.ceil(total / limit),
-        hasPrev: (filters.page || 1) > 1,
-      },
+      meta: buildPaginationMeta(1, limit, -1, nextCursor),
     };
   }
 

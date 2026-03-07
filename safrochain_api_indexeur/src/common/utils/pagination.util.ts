@@ -74,15 +74,22 @@ export const buildPaginationMeta = (
   page: number,
   limit: number,
   total: number,
-  nextCursor?: number
+  nextCursor?: number,
+  hasNextOverride?: boolean
 ): PaginationMeta => {
   const totalPages = total >= 0 ? Math.ceil(total / limit) : 0;
+  const hasNext =
+    total >= 0
+      ? page < totalPages
+      : hasNextOverride !== undefined
+        ? hasNextOverride
+        : nextCursor !== undefined;
   const meta: PaginationMeta = {
     page,
     limit,
     total: total >= 0 ? total : 0,
     totalPages,
-    hasNext: total >= 0 ? page < totalPages : (nextCursor !== undefined),
+    hasNext,
     hasPrev: page > 1,
   };
   if (nextCursor !== undefined) {

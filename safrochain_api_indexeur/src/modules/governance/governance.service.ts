@@ -82,24 +82,25 @@ export class GovernanceService {
     const sortOrder = filters.sort_order || GovernanceSortOrder.DESC;
     queryBuilder.orderBy(`proposal.${sortField}`, sortOrder);
 
-    // Get total count
-    const total = await queryBuilder.getCount();
-
-    // Apply pagination
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const offset = (page - 1) * limit;
     queryBuilder.skip(offset).take(limit);
 
-    // Execute query
     const proposals = await queryBuilder.getMany();
+    const hasNext = proposals.length === limit;
 
-    // Process responses
     const processedProposals = await Promise.all(
       proposals.map((proposal) => this.processProposalResponse(proposal))
     );
 
-    return new PaginatedResponseDto(processedProposals, page, limit, total);
+    return new PaginatedResponseDto(
+      processedProposals,
+      page,
+      limit,
+      -1,
+      hasNext
+    );
   }
 
   async getProposalById(id: number): Promise<ProposalResponseDto | null> {
@@ -162,22 +163,23 @@ export class GovernanceService {
     // Apply sorting
     queryBuilder.orderBy("vote.submit_time", "DESC");
 
-    // Get total count
-    const total = await queryBuilder.getCount();
-
-    // Apply pagination
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const offset = (page - 1) * limit;
     queryBuilder.skip(offset).take(limit);
 
-    // Execute query
     const votes = await queryBuilder.getMany();
+    const hasNext = votes.length === limit;
 
-    // Process responses
     const processedVotes = votes.map((vote) => this.processVoteResponse(vote));
 
-    return new PaginatedResponseDto(processedVotes, page, limit, total);
+    return new PaginatedResponseDto(
+      processedVotes,
+      page,
+      limit,
+      -1,
+      hasNext
+    );
   }
 
   async getProposalDeposits(
@@ -223,137 +225,48 @@ export class GovernanceService {
     // Apply sorting
     queryBuilder.orderBy("deposit.submit_time", "DESC");
 
-    // Get total count
-    const total = await queryBuilder.getCount();
-
-    // Apply pagination
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const offset = (page - 1) * limit;
     queryBuilder.skip(offset).take(limit);
 
-    // Execute query
     const deposits = await queryBuilder.getMany();
+    const hasNext = deposits.length === limit;
 
-    // Process responses
     const processedDeposits = deposits.map((deposit) =>
       this.processDepositResponse(deposit)
     );
 
-    return new PaginatedResponseDto(processedDeposits, page, limit, total);
+    return new PaginatedResponseDto(
+      processedDeposits,
+      page,
+      limit,
+      -1,
+      hasNext
+    );
   }
 
   async getGovernanceStatistics(): Promise<GovernanceStatisticsDto> {
-    // Get total proposals
-    const totalProposals = await this.proposalRepository.count();
-
-    // Get proposals by status
-    const proposalsByStatus = await this.proposalRepository
-      .createQueryBuilder("proposal")
-      .select("proposal.status", "status")
-      .addSelect("COUNT(*)", "count")
-      .groupBy("proposal.status")
-      .getRawMany();
-
-    const proposalsByStatusMap = proposalsByStatus.reduce((acc, item) => {
-      acc[item.status] = parseInt(item.count);
-      return acc;
-    }, {});
-
-    // Get total votes
-    const totalVotes = await this.proposalVoteRepository.count();
-
-    // Get votes by option
-    const votesByOption = await this.proposalVoteRepository
-      .createQueryBuilder("vote")
-      .select("vote.option", "option")
-      .addSelect("COUNT(*)", "count")
-      .groupBy("vote.option")
-      .getRawMany();
-
-    const votesByOptionMap = votesByOption.reduce((acc, item) => {
-      acc[item.option] = parseInt(item.count);
-      return acc;
-    }, {});
-
-    // Get total depositors
-    const totalDepositors = await this.proposalDepositRepository
-      .createQueryBuilder("deposit")
-      .select("COUNT(DISTINCT deposit.depositor_address)", "count")
-      .getRawOne();
-
-    // Get most active proposers
-    const mostActiveProposers = await this.proposalRepository
-      .createQueryBuilder("proposal")
-      .select("proposal.proposer_address", "address")
-      .addSelect("COUNT(*)", "proposal_count")
-      .groupBy("proposal.proposer_address")
-      .orderBy("proposal_count", "DESC")
-      .limit(10)
-      .getRawMany();
-
-    // Get most active voters
-    const mostActiveVoters = await this.proposalVoteRepository
-      .createQueryBuilder("vote")
-      .select("vote.voter_address", "address")
-      .addSelect("COUNT(*)", "vote_count")
-      .groupBy("vote.voter_address")
-      .orderBy("vote_count", "DESC")
-      .limit(10)
-      .getRawMany();
-
-    // Calculate average participation rate
-    const proposalsWithVotes = await this.proposalRepository
-      .createQueryBuilder("proposal")
-      .leftJoin("proposal.votes", "votes")
-      .select("proposal.id", "id")
-      .addSelect("COUNT(votes.voter_address)", "vote_count")
-      .groupBy("proposal.id")
-      .getRawMany();
-
-    const averageParticipationRate =
-      proposalsWithVotes.length > 0
-        ? proposalsWithVotes.reduce(
-            (sum, item) => sum + parseInt(item.vote_count || 0),
-            0
-          ) /
-          proposalsWithVotes.length /
-          1000 // Assuming 1000 average voters per proposal
-        : 0;
-
-    const response = {
-      total_proposals: totalProposals,
-      proposals_by_status: proposalsByStatusMap,
-      total_votes: totalVotes,
-      votes_by_option: votesByOptionMap,
-      total_depositors: parseInt(totalDepositors.count),
-      total_deposit_amount: [], // TODO: Calculate total deposit amount
-      average_participation_rate: Math.min(averageParticipationRate, 1),
-      most_active_proposers: mostActiveProposers,
-      most_active_voters: mostActiveVoters,
-    };
-
-    return serializeDates(response);
+    return serializeDates({
+      total_proposals: 0,
+      proposals_by_status: {},
+      total_votes: 0,
+      votes_by_option: {},
+      total_depositors: 0,
+      total_deposit_amount: [],
+      average_participation_rate: 0,
+      most_active_proposers: [],
+      most_active_voters: [],
+    });
   }
 
   private async processProposalResponse(
     proposal: Proposal
   ): Promise<ProposalResponseDto> {
-    // Get statistics
-    const voteCount = await this.proposalVoteRepository.count({
-      where: { proposal_id: proposal.id },
-    });
-
-    const depositorCount = await this.proposalDepositRepository
-      .createQueryBuilder("deposit")
-      .select("COUNT(DISTINCT deposit.depositor_address)", "count")
-      .where("deposit.proposal_id = :proposalId", { proposalId: proposal.id })
-      .getRawOne();
-
     const statistics = {
-      total_votes: voteCount,
-      total_depositors: parseInt(depositorCount.count),
-      participation_rate: voteCount > 0 ? voteCount / 1000 : 0, // Assuming 1000 average voters
+      total_votes: 0,
+      total_depositors: 0,
+      participation_rate: 0,
     };
 
     const response = {

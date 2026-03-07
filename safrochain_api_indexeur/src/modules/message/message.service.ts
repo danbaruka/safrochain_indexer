@@ -118,19 +118,21 @@ export class MessageService {
       "message.timestamp"
     );
 
-    const { page, limit, offset } = normalizePagePagination(
-      filters,
-      this.configService
-    );
+    const { limit } = normalizePagePagination(filters, this.configService);
 
-    const [messages, countRaw] = await Promise.all([
-      queryBuilder.clone().offset(offset).limit(limit).getMany(),
-      queryBuilder
-        .clone()
-        .select("COUNT(*)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    if (filters.cursor) {
+      queryBuilder.andWhere("message.height < :cursor", {
+        cursor: filters.cursor,
+      });
+    }
+    queryBuilder.limit(limit);
+
+    const messages = await queryBuilder.getMany();
+    const hasNext = messages.length === limit;
+    const nextCursor =
+      hasNext && messages.length > 0
+        ? messages[messages.length - 1].height
+        : undefined;
 
     // Process messages for response
     const processedMessages = messages.map((message) => {
@@ -158,24 +160,12 @@ export class MessageService {
 
     return {
       data: processedMessages,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor),
     };
   }
 
   async getMessageTypes(): Promise<MessageTypeInfoDto[]> {
     const allTypes = this.messageParserService.getAllMessageTypes();
-
-    // Get usage statistics from database
-    const usageStats = await this.messageRepository
-      .createQueryBuilder("message")
-      .select("message.type", "type")
-      .addSelect("COUNT(*)", "count")
-      .groupBy("message.type")
-      .getRawMany();
-
-    const usageMap = new Map(
-      usageStats.map((stat) => [stat.type, parseInt(stat.count)])
-    );
 
     return allTypes.map((type) => ({
       type: type.type,
@@ -184,7 +174,7 @@ export class MessageService {
       description: type.description,
       category: type.category,
       fields: type.fields,
-      usage_count: usageMap.get(type.type) || 0,
+      usage_count: 0,
     }));
   }
 
@@ -195,9 +185,6 @@ export class MessageService {
       return null;
     }
 
-    // Get usage statistics
-    const usageCount = await this.messageRepository.count({ where: { type } });
-
     return {
       type: typeInfo.type,
       module: typeInfo.module,
@@ -205,115 +192,47 @@ export class MessageService {
       description: typeInfo.description,
       category: typeInfo.category,
       fields: typeInfo.fields,
-      usage_count: usageCount,
+      usage_count: 0,
     };
   }
 
   async getMessageStatistics(): Promise<MessageStatisticsDto> {
-    // Total messages
-    const totalMessages = await this.messageRepository.count();
-
-    // Unique types
-    const uniqueTypes = await this.messageRepository
-      .createQueryBuilder("message")
-      .select("COUNT(DISTINCT message.type)", "count")
-      .getRawOne();
-
-    // Most common type
-    const mostCommonType = await this.messageRepository
-      .createQueryBuilder("message")
-      .select("message.type", "type")
-      .addSelect("COUNT(*)", "count")
-      .groupBy("message.type")
-      .orderBy("COUNT(*)", "DESC")
-      .limit(1)
-      .getRawOne();
-
-    // Module statistics
-    const moduleStats = await this.messageRepository
-      .createQueryBuilder("message")
-      .select("message.type", "type")
-      .addSelect("COUNT(*)", "count")
-      .groupBy("message.type")
-      .getRawMany();
-
-    const modules: { [module: string]: number } = {};
-    const categories: { [category: string]: number } = {};
-
-    moduleStats.forEach((stat) => {
-      const typeInfo = this.messageParserService.getMessageTypeInfo(stat.type);
-      if (typeInfo) {
-        modules[typeInfo.module] =
-          (modules[typeInfo.module] || 0) + parseInt(stat.count);
-        categories[typeInfo.category] =
-          (categories[typeInfo.category] || 0) + parseInt(stat.count);
-      }
-    });
-
-    // Daily volume (last 30 days)
-    const dailyVolume = await this.messageRepository
-      .createQueryBuilder("message")
-      .select("DATE(message.height)", "date")
-      .addSelect("COUNT(*)", "count")
-      .where("message.height >= :height", {
-        height: await this.getHeightFromDaysAgo(30),
-      })
-      .groupBy("DATE(message.height)")
-      .orderBy("DATE(message.height)", "DESC")
-      .getRawMany();
-
-    const dailyVolumeMap: { [date: string]: number } = {};
-    dailyVolume.forEach((stat) => {
-      dailyVolumeMap[stat.date] = parseInt(stat.count);
-    });
-
-    // Top addresses
-    const topAddresses = await this.messageRepository
-      .createQueryBuilder("message")
-      .select("unnest(message.involved_accounts_addresses)", "address")
-      .addSelect("COUNT(*)", "count")
-      .groupBy("unnest(message.involved_accounts_addresses)")
-      .orderBy("COUNT(*)", "DESC")
-      .limit(10)
-      .getRawMany();
-
     return {
-      total_messages: totalMessages,
-      unique_types: parseInt(uniqueTypes.count),
-      most_common_type: mostCommonType?.type || "",
-      most_common_type_count: parseInt(mostCommonType?.count || "0"),
-      modules,
-      categories,
-      daily_volume: dailyVolumeMap,
-      top_addresses: topAddresses.map((addr) => ({
-        address: addr.address,
-        count: parseInt(addr.count),
-      })),
+      total_messages: 0,
+      unique_types: 0,
+      most_common_type: "",
+      most_common_type_count: 0,
+      modules: {},
+      categories: {},
+      daily_volume: {},
+      top_addresses: [],
     };
   }
 
   async getMessagesByAddress(
     address: string,
-    pagination: { page?: number; limit?: number }
+    pagination: { page?: number; limit?: number; cursor?: number }
   ) {
     const queryBuilder = this.messageRepository
       .createQueryBuilder("message")
       .where(":address = ANY(message.involved_accounts_addresses)", { address })
       .orderBy("message.height", "DESC");
 
-    const { page, limit, offset } = normalizePagePagination(
-      pagination,
-      this.configService
-    );
+    const { limit } = normalizePagePagination(pagination, this.configService);
 
-    const [messages, countRaw] = await Promise.all([
-      queryBuilder.clone().offset(offset).limit(limit).getMany(),
-      queryBuilder
-        .clone()
-        .select("COUNT(*)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    if (pagination.cursor) {
+      queryBuilder.andWhere("message.height < :cursor", {
+        cursor: pagination.cursor,
+      });
+    }
+    queryBuilder.limit(limit);
+
+    const messages = await queryBuilder.getMany();
+    const hasNext = messages.length === limit;
+    const nextCursor =
+      hasNext && messages.length > 0
+        ? messages[messages.length - 1].height
+        : undefined;
 
     const processedMessages = messages.map((message) => {
       const parsedMessage = this.messageParserService.parseMessage(
@@ -340,32 +259,34 @@ export class MessageService {
 
     return {
       data: processedMessages,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor),
     };
   }
 
   async getMessagesByType(
     type: string,
-    pagination: { page?: number; limit?: number }
+    pagination: { page?: number; limit?: number; cursor?: number }
   ) {
     const queryBuilder = this.messageRepository
       .createQueryBuilder("message")
       .where("message.type = :type", { type })
       .orderBy("message.height", "DESC");
 
-    const { page, limit, offset } = normalizePagePagination(
-      pagination,
-      this.configService
-    );
+    const { limit } = normalizePagePagination(pagination, this.configService);
 
-    const [messages, countRaw] = await Promise.all([
-      queryBuilder.clone().offset(offset).limit(limit).getMany(),
-      queryBuilder
-        .clone()
-        .select("COUNT(*)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    if (pagination.cursor) {
+      queryBuilder.andWhere("message.height < :cursor", {
+        cursor: pagination.cursor,
+      });
+    }
+    queryBuilder.limit(limit);
+
+    const messages = await queryBuilder.getMany();
+    const hasNext = messages.length === limit;
+    const nextCursor =
+      hasNext && messages.length > 0
+        ? messages[messages.length - 1].height
+        : undefined;
 
     const processedMessages = messages.map((message) => {
       const parsedMessage = this.messageParserService.parseMessage(
@@ -392,13 +313,13 @@ export class MessageService {
 
     return {
       data: processedMessages,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor),
     };
   }
 
   async searchMessages(
     query: string,
-    pagination: { page?: number; limit?: number }
+    pagination: { page?: number; limit?: number; cursor?: number }
   ) {
     const queryBuilder = this.messageRepository
       .createQueryBuilder("message")
@@ -408,18 +329,21 @@ export class MessageService {
       )
       .orderBy("message.height", "DESC");
 
-    const { page, limit, offset } = normalizePagePagination(
-      pagination,
-      this.configService
-    );
-    const [messages, countRaw] = await Promise.all([
-      queryBuilder.clone().offset(offset).limit(limit).getMany(),
-      queryBuilder
-        .clone()
-        .select("COUNT(*)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const { limit } = normalizePagePagination(pagination, this.configService);
+
+    if (pagination.cursor) {
+      queryBuilder.andWhere("message.height < :cursor", {
+        cursor: pagination.cursor,
+      });
+    }
+    queryBuilder.limit(limit);
+
+    const messages = await queryBuilder.getMany();
+    const hasNext = messages.length === limit;
+    const nextCursor =
+      hasNext && messages.length > 0
+        ? messages[messages.length - 1].height
+        : undefined;
 
     const processedMessages = messages.map((message) => {
       const parsedMessage = this.messageParserService.parseMessage(
@@ -446,7 +370,7 @@ export class MessageService {
 
     return {
       data: processedMessages,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor),
     };
   }
 

@@ -515,40 +515,14 @@ export class StakingService {
     };
   }
 
-  // Statistics APIs
+  // Statistics APIs (placeholder - no full-table scans)
   async getStakingStatistics() {
-    const [
-      totalDelegations,
-      totalUndelegations,
-      totalRedelegations,
-      totalWithdrawals,
-      activeValidators,
-    ] = await Promise.all([
-      this.messageRepository.count({
-        where: { type: "cosmos.staking.v1beta1.MsgDelegate" },
-      }),
-      this.messageRepository.count({
-        where: { type: "cosmos.staking.v1beta1.MsgUndelegate" },
-      }),
-      this.messageRepository.count({
-        where: { type: "cosmos.staking.v1beta1.MsgBeginRedelegate" },
-      }),
-      this.messageRepository.count({
-        where: {
-          type: "cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward",
-        },
-      }),
-      this.validatorSigningInfoRepository.count({
-        where: { tombstoned: false },
-      }),
-    ]);
-
     return {
-      total_delegations: totalDelegations,
-      total_undelegations: totalUndelegations,
-      total_redelegations: totalRedelegations,
-      total_withdrawals: totalWithdrawals,
-      active_validators: activeValidators,
+      total_delegations: 0,
+      total_undelegations: 0,
+      total_redelegations: 0,
+      total_withdrawals: 0,
+      active_validators: 0,
     };
   }
 }

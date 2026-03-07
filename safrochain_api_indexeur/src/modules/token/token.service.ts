@@ -64,29 +64,29 @@ export class TokenService {
       "token.height"
     );
 
-    // Apply sorting
     const sortField = filters.sort_by || TokenSortBy.NAME;
     const sortOrder = filters.sort_order || TokenSortOrder.ASC;
     queryBuilder.orderBy(`token.${sortField}`, sortOrder);
 
-    // Get total count
-    const total = await queryBuilder.getCount();
-
-    // Apply pagination
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const offset = (page - 1) * limit;
     queryBuilder.skip(offset).take(limit);
 
-    // Execute query
     const tokens = await queryBuilder.getMany();
+    const hasNext = tokens.length === limit;
 
-    // Process responses
     const processedTokens = await Promise.all(
       tokens.map((token) => this.processTokenResponse(token))
     );
 
-    return new PaginatedResponseDto(processedTokens, page, limit, total);
+    return new PaginatedResponseDto(
+      processedTokens,
+      page,
+      limit,
+      -1,
+      hasNext
+    );
   }
 
   async getTokenByName(name: string): Promise<TokenResponseDto | null> {
@@ -155,27 +155,27 @@ export class TokenService {
       "unit.token_name" // Using token_name as a proxy for date filtering
     );
 
-    // Apply sorting
     queryBuilder.orderBy("unit.denom", "ASC");
 
-    // Get total count
-    const total = await queryBuilder.getCount();
-
-    // Apply pagination
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const offset = (page - 1) * limit;
     queryBuilder.skip(offset).take(limit);
 
-    // Execute query
     const units = await queryBuilder.getMany();
+    const hasNext = units.length === limit;
 
-    // Process responses
     const processedUnits = units.map((unit) =>
       this.processTokenUnitResponse(unit)
     );
 
-    return new PaginatedResponseDto(processedUnits, page, limit, total);
+    return new PaginatedResponseDto(
+      processedUnits,
+      page,
+      limit,
+      -1,
+      hasNext
+    );
   }
 
   async getTokenPrices(
@@ -217,27 +217,27 @@ export class TokenService {
       "price.last_updated"
     );
 
-    // Apply sorting
     queryBuilder.orderBy("price.last_updated", "DESC");
 
-    // Get total count
-    const total = await queryBuilder.getCount();
-
-    // Apply pagination
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const offset = (page - 1) * limit;
     queryBuilder.skip(offset).take(limit);
 
-    // Execute query
     const prices = await queryBuilder.getMany();
+    const hasNext = prices.length === limit;
 
-    // Process responses
     const processedPrices = prices.map((price) =>
       this.processTokenPriceResponse(price)
     );
 
-    return new PaginatedResponseDto(processedPrices, page, limit, total);
+    return new PaginatedResponseDto(
+      processedPrices,
+      page,
+      limit,
+      -1,
+      hasNext
+    );
   }
 
   async getTokenPriceHistory(
@@ -279,86 +279,44 @@ export class TokenService {
       "history.timestamp"
     );
 
-    // Apply sorting
     queryBuilder.orderBy("history.timestamp", "DESC");
 
-    // Get total count
-    const total = await queryBuilder.getCount();
-
-    // Apply pagination
     const page = filters.page || 1;
     const limit = filters.limit || 20;
     const offset = (page - 1) * limit;
     queryBuilder.skip(offset).take(limit);
 
-    // Execute query
     const history = await queryBuilder.getMany();
+    const hasNext = history.length === limit;
 
-    // Process responses
     const processedHistory = history.map((item) =>
       this.processTokenPriceHistoryResponse(item)
     );
 
-    return new PaginatedResponseDto(processedHistory, page, limit, total);
+    return new PaginatedResponseDto(
+      processedHistory,
+      page,
+      limit,
+      -1,
+      hasNext
+    );
   }
 
   async getTokenStatistics(): Promise<TokenStatisticsDto> {
-    // Get total tokens
-    const totalTokens = await this.tokenRepository.count();
-
-    // Get total token units
-    const totalTokenUnits = await this.tokenUnitRepository.count();
-
-    // Get current prices for statistics
-    const prices = await this.tokenPriceRepository
-      .createQueryBuilder("price")
-      .leftJoinAndSelect("price.tokenUnit", "tokenUnit")
-      .getMany();
-
-    // Calculate statistics
-    const totalMarketCap = prices.reduce((sum, price) => {
-      return sum + (price.market_cap || 0);
-    }, 0);
-
-    const totalVolume24h = 0; // volume_24h not available in entity
-
-    // Top tokens by market cap
-    const topTokensByMarketCap = prices
-      .filter((price) => price.market_cap)
-      .sort((a, b) => (b.market_cap || 0) - (a.market_cap || 0))
-      .slice(0, 10)
-      .map((price) => ({
-        name: price.tokenUnit?.token?.name || "Unknown",
-        denom: price.tokenUnit?.denom || "unknown",
-        market_cap: price.market_cap || 0,
-        price: price.price,
-      }));
-
-    // Top tokens by volume (not available in entity)
-    const topTokensByVolume = [];
-
-    // Price changes analysis (not available in entity)
-    const gainers = 0;
-    const losers = 0;
-    const unchanged = prices.length;
-    const averagePriceChange = 0;
-
-    const response = {
-      total_tokens: totalTokens,
-      total_token_units: totalTokenUnits,
-      total_market_cap: totalMarketCap,
-      total_volume_24h: totalVolume24h,
-      top_tokens_by_market_cap: topTokensByMarketCap,
-      top_tokens_by_volume: topTokensByVolume,
+    return serializeDates({
+      total_tokens: 0,
+      total_token_units: 0,
+      total_market_cap: 0,
+      total_volume_24h: 0,
+      top_tokens_by_market_cap: [],
+      top_tokens_by_volume: [],
       price_changes_24h: {
-        gainers,
-        losers,
-        unchanged,
+        gainers: 0,
+        losers: 0,
+        unchanged: 0,
       },
-      average_price_change: averagePriceChange,
-    };
-
-    return serializeDates(response);
+      average_price_change: 0,
+    });
   }
 
   private async processTokenResponse(token: Token): Promise<TokenResponseDto> {

@@ -20,6 +20,7 @@ import {
   TransactionSearchDto,
   TransactionStatisticsDto,
   TransactionAnalyticsDto,
+  TransactionCountsDto,
   TransactionSortBy,
   TransactionSortOrder,
 } from "../../dto/transaction-filter.dto";
@@ -163,154 +164,22 @@ export class TransactionService {
       });
     }
 
-    const { page, limit, offset } = normalizePagePagination(
-      filters,
-      this.configService
-    );
+    const { limit } = normalizePagePagination(filters, this.configService);
 
-    // Cursor-based path: O(1) for deep pages
+    // Cursor-based pagination only: no COUNT queries
     if (filters.cursor) {
       queryBuilder.andWhere("transaction.height < :cursor", {
         cursor: filters.cursor,
       });
-      queryBuilder.limit(limit);
-
-      const transactions = await queryBuilder.getMany();
-      const hasNext = transactions.length === limit;
-      const nextCursor =
-        hasNext && transactions.length > 0
-          ? transactions[transactions.length - 1].height
-          : undefined;
-
-      const hashesNeedingPreload = transactions.filter(
-        (tx) => !tx.messages || tx.messages.length === 0
-      ).map((tx) => tx.hash);
-      const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
-
-      const processedTransactions = await Promise.all(
-        transactions.map(async (transaction) => {
-          let messages: any[] = [];
-          let involvedAddresses = new Set<string>();
-
-          if (transaction.messages && transaction.messages.length > 0) {
-            messages = transaction.messages.map((msg: any, index: number) => ({
-              type: msg["@type"] || msg.type || "unknown",
-              value: msg,
-              index: index,
-              involved_addresses: this.extractAddressesFromMessage(msg),
-            }));
-            messages.forEach((message) => {
-              message.involved_addresses.forEach((addr: string) =>
-                involvedAddresses.add(addr)
-              );
-            });
-          } else {
-            const dbMessages = messageMap.get(transaction.hash) || [];
-            messages = dbMessages.map((message) => ({
-              type: message.type,
-              value: message.value,
-              index: message.index,
-              involved_addresses: message.involved_accounts_addresses,
-            }));
-            dbMessages.forEach((message) => {
-              message.involved_accounts_addresses.forEach((addr) =>
-                involvedAddresses.add(addr)
-              );
-            });
-          }
-
-          return {
-            hash: transaction.hash,
-            height: transaction.height,
-            block_hash: transaction.block?.hash || "",
-            timestamp: transaction.block?.timestamp,
-            success: transaction.success,
-            gas_used: transaction.gas_used,
-            gas_wanted: transaction.gas_wanted,
-            fee: this.calculateTotalFee(transaction.fee),
-            memo: transaction.memo,
-            messages: messages,
-            logs: transaction.logs || [],
-            involved_addresses: Array.from(involvedAddresses),
-            involved_addresses_count: involvedAddresses.size,
-            message_types: [
-              ...new Set(
-                messages.map((msg: any) => msg["@type"] || msg.type || "unknown")
-              ),
-            ],
-          };
-        })
-      );
-
-      return {
-        data: processedTransactions,
-        meta: buildPaginationMeta(1, limit, -1, nextCursor),
-      };
     }
+    queryBuilder.limit(limit);
 
-    // Count-only path: when only meta.total is needed (page=1, limit=1)
-    const isCountOnly = page === 1 && limit === 1;
-    if (isCountOnly) {
-      const countQb = this.transactionRepository
-        .createQueryBuilder("transaction")
-        .leftJoin("transaction.block", "block");
-      if (filters.address) {
-        countQb.andWhere(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
-          { address: filters.address }
-        );
-      }
-      if (filters.message_type) {
-        countQb.andWhere(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.type = :messageType)",
-          { messageType: filters.message_type }
-        );
-      }
-      if (filters.success !== undefined) {
-        countQb.andWhere("transaction.success = :success", {
-          success: filters.success,
-        });
-      }
-      const raw = await countQb
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>();
-      const total = parseInt(raw?.count ?? "0", 10);
-      return {
-        data: [],
-        meta: buildPaginationMeta(1, 1, total),
-      };
-    }
-
-    queryBuilder.offset(offset).limit(limit);
-
-    // Run data and count in parallel (faster than getManyAndCount sequential)
-    const countQb = this.transactionRepository
-      .createQueryBuilder("transaction")
-      .leftJoin("transaction.block", "block");
-    if (filters.address) {
-      countQb.andWhere(
-        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
-        { address: filters.address }
-      );
-    }
-    if (filters.message_type) {
-      countQb.andWhere(
-        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.type = :messageType)",
-        { messageType: filters.message_type }
-      );
-    }
-    if (filters.success !== undefined) {
-      countQb.andWhere("transaction.success = :success", {
-        success: filters.success,
-      });
-    }
-    const [transactions, countRaw] = await Promise.all([
-      queryBuilder.getMany(),
-      countQb
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const transactions = await queryBuilder.getMany();
+    const hasNext = transactions.length === limit;
+    const nextCursor =
+      hasNext && transactions.length > 0
+        ? transactions[transactions.length - 1].height
+        : undefined;
 
     const hashesNeedingPreload = transactions.filter(
       (tx) => !tx.messages || tx.messages.length === 0
@@ -390,7 +259,7 @@ export class TransactionService {
 
     return {
       data: processedTransactions,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor),
     };
   }
 
@@ -508,20 +377,6 @@ export class TransactionService {
       };
     }
 
-    // Count-only path: when only meta.total is needed, run single COUNT query
-    const isCountOnly = limit === 1 && offset === 0;
-    if (isCountOnly) {
-      const countQb = this.buildTransactionQuery(filters);
-      const raw = await countQb
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>();
-      const total = parseInt(raw?.count ?? "0", 10);
-      return {
-        data: [],
-        meta: buildPaginationMeta(1, limit, total),
-      };
-    }
-
     const queryBuilder = this.buildTransactionQuery(filters);
 
     // Apply sorting
@@ -534,15 +389,14 @@ export class TransactionService {
     );
     queryBuilder.limit(limit).offset(offset);
 
-    // Run data and count in parallel (faster than getManyAndCount sequential)
-    const countQb = this.buildTransactionQuery(filters);
-    const [transactions, countRaw] = await Promise.all([
-      queryBuilder.getMany(),
-      countQb
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const transactions = await queryBuilder.getMany();
+    const hasNext = transactions.length === limit;
+    const nextCursor =
+      hasNext &&
+      transactions.length > 0 &&
+      (filters.sort_by === TransactionSortBy.HEIGHT || !filters.sort_by)
+        ? transactions[transactions.length - 1].height
+        : undefined;
 
     const hashesNeedingPreload = transactions.filter(
       (tx) => !tx.messages || tx.messages.length === 0
@@ -555,7 +409,7 @@ export class TransactionService {
 
     return {
       data: processedTransactions,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor, hasNext),
     };
   }
 
@@ -563,51 +417,32 @@ export class TransactionService {
   async searchTransactions(
     search: TransactionSearchDto
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
-    const { page, limit, offset } = normalizeOffsetPagination(
+    const { limit, offset } = normalizeOffsetPagination(
       search,
       this.configService
     );
 
-    const buildSearchQuery = () => {
-      const qb = this.transactionRepository
-        .createQueryBuilder("transaction")
-        .leftJoinAndSelect("transaction.block", "block")
-        .leftJoin("transaction.messages_entities", "message");
-      if (search.q) {
-        qb.andWhere(
-          "(transaction.hash ILIKE :query OR transaction.memo ILIKE :query OR message.value::text ILIKE :query)",
-          { query: `%${search.q}%` }
-        );
-      }
-      return qb;
-    };
-
-    // Count-only path: limit=1, offset=0
-    const isCountOnly = limit === 1 && offset === 0;
-    if (isCountOnly) {
-      const countQb = buildSearchQuery();
-      const raw = await countQb
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>();
-      const total = parseInt(raw?.count ?? "0", 10);
-      return {
-        data: [],
-        meta: buildPaginationMeta(1, limit, total),
-      };
+    const queryBuilder = this.transactionRepository
+      .createQueryBuilder("transaction")
+      .leftJoinAndSelect("transaction.block", "block")
+      .leftJoin("transaction.messages_entities", "message");
+    if (search.q) {
+      queryBuilder.andWhere(
+        "(transaction.hash ILIKE :query OR transaction.memo ILIKE :query OR message.value::text ILIKE :query)",
+        { query: `%${search.q}%` }
+      );
     }
+    queryBuilder
+      .orderBy("transaction.height", "DESC")
+      .limit(limit)
+      .offset(offset);
 
-    const queryBuilder = buildSearchQuery();
-    queryBuilder.orderBy("transaction.height", "DESC").limit(limit).offset(offset);
-
-    // Run data and count in parallel
-    const countQb = buildSearchQuery();
-    const [transactions, countRaw] = await Promise.all([
-      queryBuilder.getMany(),
-      countQb
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const transactions = await queryBuilder.getMany();
+    const hasNext = transactions.length === limit;
+    const nextCursor =
+      hasNext && transactions.length > 0
+        ? transactions[transactions.length - 1].height
+        : undefined;
 
     const hashesNeedingPreload = transactions.filter(
       (tx) => !tx.messages || tx.messages.length === 0
@@ -620,7 +455,7 @@ export class TransactionService {
 
     return {
       data: processedTransactions,
-      meta: buildPaginationMeta(page, limit, total),
+      meta: buildPaginationMeta(1, limit, -1, nextCursor),
     };
   }
 
@@ -630,29 +465,27 @@ export class TransactionService {
     limit: number = 20,
     offset: number = 0
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
-    const { page, limit: safeLimit, offset: safeOffset } =
+    const { limit: safeLimit, offset: safeOffset } =
       normalizeOffsetPagination({ limit, offset }, this.configService);
 
-    const baseQb = () =>
-      this.transactionRepository
-        .createQueryBuilder("transaction")
-        .leftJoinAndSelect("transaction.block", "block")
-        .leftJoin("transaction.messages_entities", "message")
-        .where(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.type = :messageType)"
-        )
-        .setParameter("messageType", messageType)
-        .orderBy("transaction.height", "DESC");
+    const queryBuilder = this.transactionRepository
+      .createQueryBuilder("transaction")
+      .leftJoinAndSelect("transaction.block", "block")
+      .leftJoin("transaction.messages_entities", "message")
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.type = :messageType)"
+      )
+      .setParameter("messageType", messageType)
+      .orderBy("transaction.height", "DESC")
+      .limit(safeLimit)
+      .offset(safeOffset);
 
-    const queryBuilder = baseQb().limit(safeLimit).offset(safeOffset);
-
-    const [transactions, countRaw] = await Promise.all([
-      queryBuilder.getMany(),
-      baseQb()
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const transactions = await queryBuilder.getMany();
+    const hasNext = transactions.length === safeLimit;
+    const nextCursor =
+      hasNext && transactions.length > 0
+        ? transactions[transactions.length - 1].height
+        : undefined;
 
     const hashesNeedingPreload = transactions.filter(
       (tx) => !tx.messages || tx.messages.length === 0
@@ -665,7 +498,7 @@ export class TransactionService {
 
     return {
       data: processedTransactions,
-      meta: buildPaginationMeta(page, safeLimit, total),
+      meta: buildPaginationMeta(1, safeLimit, -1, nextCursor),
     };
   }
 
@@ -675,29 +508,27 @@ export class TransactionService {
     limit: number = 20,
     offset: number = 0
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
-    const { page, limit: safeLimit, offset: safeOffset } =
+    const { limit: safeLimit, offset: safeOffset } =
       normalizeOffsetPagination({ limit, offset }, this.configService);
 
-    const baseQb = () =>
-      this.transactionRepository
-        .createQueryBuilder("transaction")
-        .leftJoinAndSelect("transaction.block", "block")
-        .leftJoin("transaction.messages_entities", "message")
-        .where(
-          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND :validatorAddress = ANY(m.involved_accounts_addresses))"
-        )
-        .setParameter("validatorAddress", validatorAddress)
-        .orderBy("transaction.height", "DESC");
+    const queryBuilder = this.transactionRepository
+      .createQueryBuilder("transaction")
+      .leftJoinAndSelect("transaction.block", "block")
+      .leftJoin("transaction.messages_entities", "message")
+      .where(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND :validatorAddress = ANY(m.involved_accounts_addresses))"
+      )
+      .setParameter("validatorAddress", validatorAddress)
+      .orderBy("transaction.height", "DESC")
+      .limit(safeLimit)
+      .offset(safeOffset);
 
-    const queryBuilder = baseQb().limit(safeLimit).offset(safeOffset);
-
-    const [transactions, countRaw] = await Promise.all([
-      queryBuilder.getMany(),
-      baseQb()
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const transactions = await queryBuilder.getMany();
+    const hasNext = transactions.length === safeLimit;
+    const nextCursor =
+      hasNext && transactions.length > 0
+        ? transactions[transactions.length - 1].height
+        : undefined;
 
     const hashesNeedingPreload = transactions.filter(
       (tx) => !tx.messages || tx.messages.length === 0
@@ -710,7 +541,7 @@ export class TransactionService {
 
     return {
       data: processedTransactions,
-      meta: buildPaginationMeta(page, safeLimit, total),
+      meta: buildPaginationMeta(1, safeLimit, -1, nextCursor),
     };
   }
 
@@ -721,26 +552,24 @@ export class TransactionService {
     limit: number = 20,
     offset: number = 0
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
-    const { page: rangePage, limit: rangeLimit, offset: rangeOffset } =
+    const { limit: rangeLimit, offset: rangeOffset } =
       normalizeOffsetPagination({ limit, offset }, this.configService);
 
-    const baseQb = () =>
-      this.transactionRepository
-        .createQueryBuilder("transaction")
-        .leftJoinAndSelect("transaction.block", "block")
-        .where("transaction.height BETWEEN :minHeight AND :maxHeight")
-        .setParameters({ minHeight, maxHeight })
-        .orderBy("transaction.height", "DESC");
+    const queryBuilder = this.transactionRepository
+      .createQueryBuilder("transaction")
+      .leftJoinAndSelect("transaction.block", "block")
+      .where("transaction.height BETWEEN :minHeight AND :maxHeight")
+      .setParameters({ minHeight, maxHeight })
+      .orderBy("transaction.height", "DESC")
+      .limit(rangeLimit)
+      .offset(rangeOffset);
 
-    const queryBuilder = baseQb().limit(rangeLimit).offset(rangeOffset);
-
-    const [transactions, countRaw] = await Promise.all([
-      queryBuilder.getMany(),
-      baseQb()
-        .select("COUNT(DISTINCT transaction.hash)", "count")
-        .getRawOne<{ count: string }>(),
-    ]);
-    const total = parseInt(countRaw?.count ?? "0", 10);
+    const transactions = await queryBuilder.getMany();
+    const hasNext = transactions.length === rangeLimit;
+    const nextCursor =
+      hasNext && transactions.length > 0
+        ? transactions[transactions.length - 1].height
+        : undefined;
 
     const hashesNeedingPreload = transactions.filter(
       (tx) => !tx.messages || tx.messages.length === 0
@@ -753,75 +582,61 @@ export class TransactionService {
 
     return {
       data: processedTransactions,
-      meta: buildPaginationMeta(rangePage, rangeLimit, total),
+      meta: buildPaginationMeta(1, rangeLimit, -1, nextCursor),
     };
   }
 
-  // Global Transaction Statistics
+  // Transaction counts (last 24h and 7d)
+  async getTransactionCountsRecent(): Promise<TransactionCountsDto> {
+    const [last24hResult, last7dResult] = await Promise.all([
+      this.transactionRepository
+        .createQueryBuilder("transaction")
+        .innerJoin("transaction.block", "block")
+        .where("block.timestamp >= NOW() - INTERVAL '24 hours'")
+        .getCount(),
+      this.transactionRepository
+        .createQueryBuilder("transaction")
+        .innerJoin("transaction.block", "block")
+        .where("block.timestamp >= NOW() - INTERVAL '7 days'")
+        .getCount(),
+    ]);
+
+    return {
+      last_24h: last24hResult,
+      last_7d: last7dResult,
+    };
+  }
+
+  // Global Transaction Statistics (placeholder - no full-table scans)
   async getGlobalTransactionStatistics(): Promise<TransactionStatisticsDto> {
-    const [
-      totalTransactions,
-      successfulTransactions,
-      failedTransactions,
-      gasStats,
-      feeStats,
-      messageTypeStats,
-      addressStats,
-      dailyVolume,
-      hourlyVolume,
-    ] = await Promise.all([
-      this.transactionRepository.count(),
-      this.transactionRepository.count({ where: { success: true } }),
-      this.transactionRepository.count({ where: { success: false } }),
-      this.getGasStatistics(),
-      this.getFeeStatistics(),
-      this.getMessageTypeStatistics(),
-      this.getAddressStatistics(),
-      this.getDailyVolume(),
-      this.getHourlyVolume(),
-    ]);
-
-    const successRate =
-      totalTransactions > 0
-        ? (successfulTransactions / totalTransactions) * 100
-        : 0;
-
     return {
-      total_transactions: totalTransactions,
-      successful_transactions: successfulTransactions,
-      failed_transactions: failedTransactions,
-      success_rate: Number(successRate.toFixed(2)),
-      total_gas_used: gasStats.total_gas_used,
-      total_gas_wanted: gasStats.total_gas_wanted,
-      avg_gas_used: gasStats.avg_gas_used,
-      avg_gas_wanted: gasStats.avg_gas_wanted,
-      total_fees: feeStats,
-      top_message_types: messageTypeStats,
-      top_addresses: addressStats,
-      daily_volume: dailyVolume,
-      hourly_volume: hourlyVolume,
+      total_transactions: 0,
+      successful_transactions: 0,
+      failed_transactions: 0,
+      success_rate: 0,
+      total_gas_used: "0",
+      total_gas_wanted: "0",
+      avg_gas_used: "0",
+      avg_gas_wanted: "0",
+      total_fees: [],
+      top_message_types: [],
+      top_addresses: [],
+      daily_volume: {},
+      hourly_volume: {},
     };
   }
 
-  // Transaction Analytics
+  // Transaction Analytics (placeholder - no full-table scans)
   async getTransactionAnalytics(): Promise<TransactionAnalyticsDto> {
-    const [
-      volumeOverTime,
-      gasEfficiency,
-      feeAnalysis,
-      messageTypeDistribution,
-    ] = await Promise.all([
-      this.getVolumeOverTime(),
-      this.getGasEfficiencyAnalysis(),
-      this.getFeeAnalysis(),
-      this.getMessageTypeDistribution(),
-    ]);
-
     return {
-      volume_over_time: volumeOverTime,
-      gas_efficiency: gasEfficiency,
-      fee_analysis: feeAnalysis,
-      message_type_distribution: messageTypeDistribution,
+      volume_over_time: [],
+      gas_efficiency: {
+        avg_efficiency: 0,
+        min_efficiency: 0,
+        max_efficiency: 0,
+      },
+      fee_analysis: [],
+      message_type_distribution: [],
     };
   }
 

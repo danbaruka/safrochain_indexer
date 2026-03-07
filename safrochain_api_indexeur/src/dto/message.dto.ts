@@ -130,6 +130,18 @@ export class MessageListDto extends DateFilterDto {
   limit?: number = 20;
 
   @ApiProperty({
+    description:
+      "Cursor for pagination (block height). Use next_cursor from previous response.",
+    example: 12345,
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cursor?: number;
+
+  @ApiProperty({
     description: "Filter by message type",
     example: "cosmos.bank.v1beta1.MsgSend",
     required: false,

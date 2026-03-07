@@ -29,6 +29,18 @@ export class PaginationDto {
   @Max(100)
   limit?: number = 20;
 
+  @ApiPropertyOptional({
+    description:
+      "Cursor for pagination (block height). Use next_cursor from previous response.",
+    example: 12345,
+    required: false,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cursor?: number;
+
   get offset(): number {
     return ((this.page || 1) - 1) * (this.limit || 20);
   }
@@ -110,12 +122,22 @@ export class PaginationMetaDto {
   })
   next_cursor?: number;
 
-  constructor(page: number, limit: number, total: number) {
+  constructor(
+    page: number,
+    limit: number,
+    total: number,
+    hasNextOverride?: boolean
+  ) {
     this.page = page;
     this.limit = limit;
-    this.total = total;
-    this.totalPages = Math.ceil(total / limit);
-    this.hasNext = page < this.totalPages;
+    this.total = total >= 0 ? total : 0;
+    this.totalPages = total >= 0 ? Math.ceil(total / limit) : 0;
+    this.hasNext =
+      total >= 0
+        ? page < this.totalPages
+        : hasNextOverride !== undefined
+          ? hasNextOverride
+          : false;
     this.hasPrev = page > 1;
   }
 }
@@ -132,8 +154,14 @@ export class PaginatedResponseDto<T> {
   })
   meta: PaginationMetaDto;
 
-  constructor(data: T[], page: number, limit: number, total: number) {
+  constructor(
+    data: T[],
+    page: number,
+    limit: number,
+    total: number,
+    hasNextOverride?: boolean
+  ) {
     this.data = data;
-    this.meta = new PaginationMetaDto(page, limit, total);
+    this.meta = new PaginationMetaDto(page, limit, total, hasNextOverride);
   }
 }
