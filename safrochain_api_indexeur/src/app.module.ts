@@ -1,3 +1,4 @@
+import { join } from "path";
 import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
@@ -58,7 +59,8 @@ import { Genesis } from "./entities/genesis.entity";
     ConfigModule.forRoot({
       isGlobal: true,
       load: [databaseConfig, appConfig, swaggerConfig],
-      envFilePath: ".env",
+      // Check multiple paths so .env is found regardless of cwd (e.g. nested deploy dirs)
+      envFilePath: [".env", join(process.cwd(), ".env"), join(process.cwd(), "..", ".env")],
     }),
     CacheModule.registerAsync({
       isGlobal: true,

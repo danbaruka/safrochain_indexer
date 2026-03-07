@@ -194,16 +194,18 @@ async function bootstrap() {
 
   // Start server
   const port = configService.get("app.port");
+  const appUrl = configService.get<string>("app.url");
   await app.listen(port);
 
-  console.log(
-    `🚀 SafroChain API is running on: http://localhost:${port}/${apiPrefix}`
-  );
+  const baseUrl = appUrl ? appUrl.replace(/\/$/, "") : `http://localhost:${port}`;
+  console.log(`🚀 SafroChain API is running on: ${baseUrl}/${apiPrefix}`);
+  if (appUrl) {
+    console.log(`   APP_URL: ${appUrl} (Swagger will use this as Production server)`);
+  }
   const swaggerEnabled = configService.get("swagger.enabled");
   if (swaggerEnabled) {
-    console.log(
-      `📚 Swagger documentation: http://localhost:${port}/${configService.get("swagger.path")}`
-    );
+    const docsUrl = appUrl ? `${appUrl.replace(/\/$/, "")}/${configService.get("swagger.path")}` : `http://localhost:${port}/${configService.get("swagger.path")}`;
+    console.log(`📚 Swagger documentation: ${docsUrl}`);
   }
   console.log(`🌍 Environment: ${configService.get("app.environment")}`);
 }
