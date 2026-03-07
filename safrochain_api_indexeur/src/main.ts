@@ -20,11 +20,12 @@ async function bootstrap() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com", "https://cdn.jsdelivr.net", "https://static.cloudflareinsights.com"],
+          scriptSrcElem: ["'self'", "https://unpkg.com", "https://cdn.jsdelivr.net", "https://static.cloudflareinsights.com"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com", "https://cdn.jsdelivr.net"],
           fontSrc: ["'self'", "https://fonts.gstatic.com"],
           imgSrc: ["'self'", "data:", "https:"],
-          connectSrc: ["'self'"],
+          connectSrc: ["'self'", "https://unpkg.com", "https://cdn.jsdelivr.net"],
         },
       },
     })
@@ -180,11 +181,6 @@ async function bootstrap() {
         .swagger-ui .info .title { color: #3b82f6; }
         .swagger-ui .scheme-container { background: #f8fafc; padding: 10px; border-radius: 4px; }
       `,
-      customCssUrl: "https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css",
-      customJs: [
-        "https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js",
-        "https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js",
-      ],
     });
   }
 
