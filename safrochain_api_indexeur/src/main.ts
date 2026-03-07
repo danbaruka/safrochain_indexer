@@ -152,14 +152,22 @@ async function bootstrap() {
       .addTag("Governance", "Governance-related operations")
       .addTag("Token", "Token-related operations")
       .addTag("Supply", "Supply-related operations")
-      .addTag("Genesis", "Genesis-related operations")
-      .addServer(
-        `http://localhost:${configService.get("app.port")}`,
-        "Development server"
-      )
-      .build();
+      .addTag("Genesis", "Genesis-related operations");
 
-    const document = SwaggerModule.createDocument(app, config);
+    const appUrl = configService.get<string>("app.url");
+    let configBuilder = config;
+    if (appUrl) {
+      configBuilder = configBuilder.addServer(
+        appUrl.replace(/\/$/, ""),
+        "Production server"
+      );
+    }
+    configBuilder = configBuilder.addServer(
+      `http://localhost:${configService.get("app.port")}`,
+      "Development server"
+    );
+
+    const document = SwaggerModule.createDocument(app, configBuilder.build());
     SwaggerModule.setup(swaggerPath, app, document, {
       swaggerOptions: {
         persistAuthorization: true,

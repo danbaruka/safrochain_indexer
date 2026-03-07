@@ -2,6 +2,7 @@ import { registerAs } from "@nestjs/config";
 
 export default registerAs("app", () => ({
   port: parseInt(process.env.APP_PORT, 10) || 3000,
+  url: process.env.APP_URL || "",
   name: process.env.APP_NAME || "SafroChain API",
   version: process.env.APP_VERSION || "1.0.0",
   description:
