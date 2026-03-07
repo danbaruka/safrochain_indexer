@@ -586,37 +586,53 @@ export class TransactionService {
     };
   }
 
-  // Transaction counts (last 24h and 7d)
+  // Transaction counts (last 24h and 7d) - optimized: height-based subquery (no JOIN), in-memory cache
+  private countsCache: {
+    last_24h?: number;
+    last_7d?: number;
+    updatedAt: number;
+  } = { updatedAt: 0 };
+  private readonly COUNTS_CACHE_TTL_MS = 10_000; // 10 seconds
+
   async getTransactionCountsRecent(period?: "24h" | "7d"): Promise<TransactionCountsDto> {
+    const now = Date.now();
+    if (this.countsCache.updatedAt && now - this.countsCache.updatedAt < this.COUNTS_CACHE_TTL_MS) {
+      if (period === "24h") return { last_24h: this.countsCache.last_24h };
+      if (period === "7d") return { last_7d: this.countsCache.last_7d };
+      return {
+        last_24h: this.countsCache.last_24h,
+        last_7d: this.countsCache.last_7d,
+      };
+    }
+    const result = await this.runCountsQuery(period);
+    this.countsCache = {
+      last_24h: result.last_24h,
+      last_7d: result.last_7d,
+      updatedAt: Date.now(),
+    };
+    return result;
+  }
+
+  private async runCountsQuery(period?: "24h" | "7d"): Promise<TransactionCountsDto> {
+    const mgr = this.transactionRepository.manager;
+    const sql24 =
+      "SELECT COUNT(*)::int AS c FROM transaction WHERE height >= (SELECT COALESCE(MIN(height), 0) FROM block WHERE timestamp >= NOW() - INTERVAL '24 hours')";
+    const sql7 =
+      "SELECT COUNT(*)::int AS c FROM transaction WHERE height >= (SELECT COALESCE(MIN(height), 0) FROM block WHERE timestamp >= NOW() - INTERVAL '7 days')";
+
     if (period === "24h") {
-      const count = await this.transactionRepository
-        .createQueryBuilder("transaction")
-        .innerJoin("transaction.block", "block")
-        .where("block.timestamp >= NOW() - INTERVAL '24 hours'")
-        .getCount();
-      return { last_24h: count };
+      const rows = await mgr.query(sql24);
+      return { last_24h: Number(rows[0]?.c ?? 0) };
     }
     if (period === "7d") {
-      const count = await this.transactionRepository
-        .createQueryBuilder("transaction")
-        .innerJoin("transaction.block", "block")
-        .where("block.timestamp >= NOW() - INTERVAL '7 days'")
-        .getCount();
-      return { last_7d: count };
+      const rows = await mgr.query(sql7);
+      return { last_7d: Number(rows[0]?.c ?? 0) };
     }
-    const [last24hResult, last7dResult] = await Promise.all([
-      this.transactionRepository
-        .createQueryBuilder("transaction")
-        .innerJoin("transaction.block", "block")
-        .where("block.timestamp >= NOW() - INTERVAL '24 hours'")
-        .getCount(),
-      this.transactionRepository
-        .createQueryBuilder("transaction")
-        .innerJoin("transaction.block", "block")
-        .where("block.timestamp >= NOW() - INTERVAL '7 days'")
-        .getCount(),
-    ]);
-    return { last_24h: last24hResult, last_7d: last7dResult };
+    const [r24, r7] = await Promise.all([mgr.query(sql24), mgr.query(sql7)]);
+    return {
+      last_24h: Number(r24[0]?.c ?? 0),
+      last_7d: Number(r7[0]?.c ?? 0),
+    };
   }
 
   // Global Transaction Statistics (placeholder - no full-table scans)
