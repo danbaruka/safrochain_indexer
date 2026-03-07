@@ -587,7 +587,23 @@ export class TransactionService {
   }
 
   // Transaction counts (last 24h and 7d)
-  async getTransactionCountsRecent(): Promise<TransactionCountsDto> {
+  async getTransactionCountsRecent(period?: "24h" | "7d"): Promise<TransactionCountsDto> {
+    if (period === "24h") {
+      const count = await this.transactionRepository
+        .createQueryBuilder("transaction")
+        .innerJoin("transaction.block", "block")
+        .where("block.timestamp >= NOW() - INTERVAL '24 hours'")
+        .getCount();
+      return { last_24h: count };
+    }
+    if (period === "7d") {
+      const count = await this.transactionRepository
+        .createQueryBuilder("transaction")
+        .innerJoin("transaction.block", "block")
+        .where("block.timestamp >= NOW() - INTERVAL '7 days'")
+        .getCount();
+      return { last_7d: count };
+    }
     const [last24hResult, last7dResult] = await Promise.all([
       this.transactionRepository
         .createQueryBuilder("transaction")
@@ -600,11 +616,7 @@ export class TransactionService {
         .where("block.timestamp >= NOW() - INTERVAL '7 days'")
         .getCount(),
     ]);
-
-    return {
-      last_24h: last24hResult,
-      last_7d: last7dResult,
-    };
+    return { last_24h: last24hResult, last_7d: last7dResult };
   }
 
   // Global Transaction Statistics (placeholder - no full-table scans)

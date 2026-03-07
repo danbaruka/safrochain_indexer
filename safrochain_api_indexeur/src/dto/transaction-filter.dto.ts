@@ -395,14 +395,32 @@ export class TransactionCountsDto {
   @ApiProperty({
     description: "Number of transactions in the last 24 hours",
     example: 1250,
+    required: false,
   })
-  last_24h: number;
+  last_24h?: number;
 
   @ApiProperty({
     description: "Number of transactions in the last 7 days",
     example: 8750,
+    required: false,
   })
-  last_7d: number;
+  last_7d?: number;
+}
+
+export enum TransactionCountPeriod {
+  LAST_24H = "24h",
+  LAST_7D = "7d",
+}
+
+export class TransactionCountsQueryDto {
+  @ApiProperty({
+    description: "Return only this period (omit for both)",
+    enum: TransactionCountPeriod,
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(TransactionCountPeriod)
+  period?: TransactionCountPeriod;
 }
 
 export class TransactionAnalyticsDto {

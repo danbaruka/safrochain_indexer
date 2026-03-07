@@ -27,6 +27,7 @@ import {
   TransactionStatisticsDto,
   TransactionAnalyticsDto,
   TransactionCountsDto,
+  TransactionCountsQueryDto,
 } from "../../dto/transaction-filter.dto";
 import {
   OffsetPaginationDto,
@@ -42,7 +43,13 @@ export class TransactionController {
   @ApiOperation({
     summary: "Get transaction counts (last 24h and 7d)",
     description:
-      "Retrieve the count of all transactions in the last 24 hours and last 7 days.",
+      "Retrieve the count of all transactions in the last 24 hours and last 7 days. Use ?period=24h or ?period=7d to return only one.",
+  })
+  @ApiQuery({
+    name: "period",
+    description: "Return only this period (omit for both)",
+    enum: ["24h", "7d"],
+    required: false,
   })
   @ApiResponse({
     status: 200,
@@ -51,8 +58,12 @@ export class TransactionController {
   })
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(60)
-  async getTransactionCounts(): Promise<TransactionCountsDto> {
-    return await this.transactionService.getTransactionCountsRecent();
+  async getTransactionCounts(
+    @Query() query: TransactionCountsQueryDto
+  ): Promise<TransactionCountsDto> {
+    return await this.transactionService.getTransactionCountsRecent(
+      query.period
+    );
   }
 
   @Get(":hash")
