@@ -48,15 +48,39 @@ async function bootstrap() {
     })
   );
 
-  const corsOrigins = (configService.get<string>("app.corsOrigins") || "")
+  const corsOriginsRaw = (configService.get<string>("app.corsOrigins") || "")
     .split(",")
-    .map((origin) => origin.trim())
+    .map((o) => o.trim())
     .filter(Boolean);
-  const corsOrigin =
-    corsOrigins.length > 0
-      ? corsOrigins
-      : configService.get("app.environment") === "development";
-  const corsCredentials = corsOrigins.length > 0;
+
+  const corsWildcardPatterns = corsOriginsRaw.filter((o) =>
+    o.startsWith("*.")
+  ) as string[];
+  const corsExactOrigins = corsOriginsRaw.filter((o) => !o.startsWith("*."));
+
+  let corsOrigin: boolean | string[] | ((origin: string, cb: (err: Error | null, allow?: boolean) => void) => void);
+  if (corsOriginsRaw.length === 0) {
+    corsOrigin = configService.get("app.environment") === "development";
+  } else if (corsWildcardPatterns.length > 0) {
+    corsOrigin = (origin: string, callback: (err: Error | null, allow?: boolean) => void) => {
+      if (!origin) return callback(null, false);
+      if (corsExactOrigins.includes(origin)) return callback(null, true);
+      try {
+        const hostname = new URL(origin).hostname;
+        const match = corsWildcardPatterns.some((pattern) => {
+          const domain = pattern.slice(2);
+          return hostname === domain || hostname.endsWith(`.${domain}`);
+        });
+        callback(null, match);
+      } catch {
+        callback(null, false);
+      }
+    };
+  } else {
+    corsOrigin = corsExactOrigins;
+  }
+
+  const corsCredentials = corsOriginsRaw.length > 0;
 
   // CORS configuration
   app.enableCors({
