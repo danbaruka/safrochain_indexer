@@ -38,6 +38,23 @@ import {
 export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
 
+  @Get("counts")
+  @ApiOperation({
+    summary: "Get transaction counts (last 24h and 7d)",
+    description:
+      "Retrieve the count of all transactions in the last 24 hours and last 7 days.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Transaction counts retrieved successfully",
+    type: TransactionCountsDto,
+  })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(60)
+  async getTransactionCounts(): Promise<TransactionCountsDto> {
+    return await this.transactionService.getTransactionCountsRecent();
+  }
+
   @Get(":hash")
   @ApiOperation({
     summary: "Get transaction by hash",
@@ -73,23 +90,6 @@ export class TransactionController {
         HttpStatus.NOT_FOUND
       );
     }
-  }
-
-  @Get("counts")
-  @ApiOperation({
-    summary: "Get transaction counts (last 24h and 7d)",
-    description:
-      "Retrieve the count of all transactions in the last 24 hours and last 7 days.",
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Transaction counts retrieved successfully",
-    type: TransactionCountsDto,
-  })
-  @UseInterceptors(CacheInterceptor)
-  @CacheTTL(60)
-  async getTransactionCounts(): Promise<TransactionCountsDto> {
-    return await this.transactionService.getTransactionCountsRecent();
   }
 
   @Get()
