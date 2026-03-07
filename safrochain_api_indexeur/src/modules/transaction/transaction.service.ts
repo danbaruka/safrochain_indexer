@@ -167,12 +167,75 @@ export class TransactionService {
       filters,
       this.configService
     );
+
+    // Count-only path: when only meta.total is needed (page=1, limit=1)
+    const isCountOnly = page === 1 && limit === 1;
+    if (isCountOnly) {
+      const countQb = this.transactionRepository
+        .createQueryBuilder("transaction")
+        .leftJoin("transaction.block", "block");
+      if (filters.address) {
+        countQb.andWhere(
+          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+          { address: filters.address }
+        );
+      }
+      if (filters.message_type) {
+        countQb.andWhere(
+          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.type = :messageType)",
+          { messageType: filters.message_type }
+        );
+      }
+      if (filters.success !== undefined) {
+        countQb.andWhere("transaction.success = :success", {
+          success: filters.success,
+        });
+      }
+      const raw = await countQb
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>();
+      const total = parseInt(raw?.count ?? "0", 10);
+      return {
+        data: [],
+        meta: buildPaginationMeta(1, 1, total),
+      };
+    }
+
     queryBuilder.offset(offset).limit(limit);
 
-    const [transactions, total] = await queryBuilder.getManyAndCount();
-    const messageMap = await this.preloadMessagesByHash(
-      transactions.map((transaction) => transaction.hash)
-    );
+    // Run data and count in parallel (faster than getManyAndCount sequential)
+    const countQb = this.transactionRepository
+      .createQueryBuilder("transaction")
+      .leftJoin("transaction.block", "block");
+    if (filters.address) {
+      countQb.andWhere(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+        { address: filters.address }
+      );
+    }
+    if (filters.message_type) {
+      countQb.andWhere(
+        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND m.type = :messageType)",
+        { messageType: filters.message_type }
+      );
+    }
+    if (filters.success !== undefined) {
+      countQb.andWhere("transaction.success = :success", {
+        success: filters.success,
+      });
+    }
+    const [transactions, countRaw] = await Promise.all([
+      queryBuilder.getMany(),
+      countQb
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
+
+    const hashesNeedingPreload = transactions.filter(
+      (tx) => !tx.messages || tx.messages.length === 0
+    ).map((tx) => tx.hash);
+    const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
 
     // Process transactions for response
     const processedTransactions = await Promise.all(
@@ -319,6 +382,25 @@ export class TransactionService {
   async getTransactionsAdvanced(
     filters: TransactionFilterDto
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
+    const { page, limit, offset } = normalizeOffsetPagination(
+      filters,
+      this.configService
+    );
+
+    // Count-only path: when only meta.total is needed, run single COUNT query
+    const isCountOnly = limit === 1 && offset === 0;
+    if (isCountOnly) {
+      const countQb = this.buildTransactionQuery(filters);
+      const raw = await countQb
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>();
+      const total = parseInt(raw?.count ?? "0", 10);
+      return {
+        data: [],
+        meta: buildPaginationMeta(1, limit, total),
+      };
+    }
+
     const queryBuilder = this.buildTransactionQuery(filters);
 
     // Apply sorting
@@ -329,18 +411,23 @@ export class TransactionService {
       sortField,
       filters.sort_order || TransactionSortOrder.DESC
     );
-
-    const { page, limit, offset } = normalizeOffsetPagination(
-      filters,
-      this.configService
-    );
     queryBuilder.limit(limit).offset(offset);
 
-    const [transactions, total] = await queryBuilder.getManyAndCount();
+    // Run data and count in parallel (faster than getManyAndCount sequential)
+    const countQb = this.buildTransactionQuery(filters);
+    const [transactions, countRaw] = await Promise.all([
+      queryBuilder.getMany(),
+      countQb
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
-    const messageMap = await this.preloadMessagesByHash(
-      transactions.map((tx) => tx.hash)
-    );
+    const hashesNeedingPreload = transactions.filter(
+      (tx) => !tx.messages || tx.messages.length === 0
+    ).map((tx) => tx.hash);
+    const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
+
     const processedTransactions = await Promise.all(
       transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );
@@ -355,29 +442,57 @@ export class TransactionService {
   async searchTransactions(
     search: TransactionSearchDto
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
-    const queryBuilder = this.transactionRepository
-      .createQueryBuilder("transaction")
-      .leftJoinAndSelect("transaction.block", "block")
-      .leftJoin("transaction.messages_entities", "message");
-
-    if (search.q) {
-      queryBuilder.andWhere(
-        "(transaction.hash ILIKE :query OR transaction.memo ILIKE :query OR message.value::text ILIKE :query)",
-        { query: `%${search.q}%` }
-      );
-    }
-
     const { page, limit, offset } = normalizeOffsetPagination(
       search,
       this.configService
     );
+
+    const buildSearchQuery = () => {
+      const qb = this.transactionRepository
+        .createQueryBuilder("transaction")
+        .leftJoinAndSelect("transaction.block", "block")
+        .leftJoin("transaction.messages_entities", "message");
+      if (search.q) {
+        qb.andWhere(
+          "(transaction.hash ILIKE :query OR transaction.memo ILIKE :query OR message.value::text ILIKE :query)",
+          { query: `%${search.q}%` }
+        );
+      }
+      return qb;
+    };
+
+    // Count-only path: limit=1, offset=0
+    const isCountOnly = limit === 1 && offset === 0;
+    if (isCountOnly) {
+      const countQb = buildSearchQuery();
+      const raw = await countQb
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>();
+      const total = parseInt(raw?.count ?? "0", 10);
+      return {
+        data: [],
+        meta: buildPaginationMeta(1, limit, total),
+      };
+    }
+
+    const queryBuilder = buildSearchQuery();
     queryBuilder.orderBy("transaction.height", "DESC").limit(limit).offset(offset);
 
-    const [transactions, total] = await queryBuilder.getManyAndCount();
+    // Run data and count in parallel
+    const countQb = buildSearchQuery();
+    const [transactions, countRaw] = await Promise.all([
+      queryBuilder.getMany(),
+      countQb
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
-    const messageMap = await this.preloadMessagesByHash(
-      transactions.map((tx) => tx.hash)
-    );
+    const hashesNeedingPreload = transactions.filter(
+      (tx) => !tx.messages || tx.messages.length === 0
+    ).map((tx) => tx.hash);
+    const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
+
     const processedTransactions = await Promise.all(
       transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );

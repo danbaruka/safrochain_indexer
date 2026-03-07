@@ -102,18 +102,26 @@ export class AddressService {
       pagination,
       this.configService
     );
-    const queryBuilder = this.transactionRepository
-      .createQueryBuilder("transaction")
-      .leftJoinAndSelect("transaction.block", "block")
-      .where(
-        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
-        { address }
-      )
-      .orderBy("transaction.height", "DESC")
-      .offset(offset)
-      .limit(limit);
+    const baseQb = () =>
+      this.transactionRepository
+        .createQueryBuilder("transaction")
+        .leftJoinAndSelect("transaction.block", "block")
+        .where(
+          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.partition_id = transaction.partition_id AND :address = ANY(m.involved_accounts_addresses))",
+          { address }
+        )
+        .orderBy("transaction.height", "DESC");
 
-    const [transactions, total] = await queryBuilder.getManyAndCount();
+    const queryBuilder = baseQb().offset(offset).limit(limit);
+
+    // Run data and count in parallel
+    const [transactions, countRaw] = await Promise.all([
+      queryBuilder.getMany(),
+      baseQb()
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
     const processedTransactions = transactions.map((transaction) => {
       // Find messages that involve this address
@@ -402,6 +410,25 @@ export class AddressService {
     address: string,
     filters: AddressTransactionFilterDto
   ): Promise<PaginatedResponseDto<AddressTransactionResponseDto>> {
+    const { page, limit, offset } = normalizeOffsetPagination(
+      filters,
+      this.configService
+    );
+
+    // Count-only path: when only meta.total is needed (limit=1, offset=0)
+    const isCountOnly = limit === 1 && offset === 0;
+    if (isCountOnly) {
+      const countQb = this.buildAddressTransactionQuery(address, filters);
+      const raw = await countQb
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>();
+      const total = parseInt(raw?.count ?? "0", 10);
+      return {
+        data: [],
+        meta: buildPaginationMeta(1, limit, total),
+      };
+    }
+
     const queryBuilder = this.buildAddressTransactionQuery(address, filters);
 
     // Apply sorting
@@ -412,14 +439,17 @@ export class AddressService {
       sortField,
       filters.sort_order || AddressTransactionSortOrder.DESC
     );
-
-    const { page, limit, offset } = normalizeOffsetPagination(
-      filters,
-      this.configService
-    );
     queryBuilder.limit(limit).offset(offset);
 
-    const [transactions, total] = await queryBuilder.getManyAndCount();
+    // Run data and count in parallel (faster than getManyAndCount sequential)
+    const countQb = this.buildAddressTransactionQuery(address, filters);
+    const [transactions, countRaw] = await Promise.all([
+      queryBuilder.getMany(),
+      countQb
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
     const processedTransactions = await Promise.all(
       transactions.map((tx) =>

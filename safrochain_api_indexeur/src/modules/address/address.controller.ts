@@ -99,6 +99,8 @@ export class AddressController {
     status: 404,
     description: "Address not found",
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getAddressTransactions(
     @Param() params: AddressDto,
     @Query() pagination: PaginationDto
@@ -493,6 +495,8 @@ export class AddressController {
     status: 404,
     description: "Address not found",
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getAddressTransactionsAdvanced(
     @Param() params: AddressDto,
     @Query() filters: AddressTransactionFilterDto

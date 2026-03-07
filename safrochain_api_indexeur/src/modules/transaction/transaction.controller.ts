@@ -114,6 +114,8 @@ export class TransactionController {
     status: 200,
     description: "Transactions retrieved successfully",
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getTransactions(@Query() filters: TransactionListDto) {
     return await this.transactionService.getTransactions(filters);
   }
@@ -255,6 +257,8 @@ export class TransactionController {
     description: "Filtered transactions retrieved successfully",
     type: PaginatedResponseDto<TransactionResponseDto>,
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getTransactionsAdvanced(
     @Query() filters: TransactionFilterDto
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
@@ -283,6 +287,8 @@ export class TransactionController {
     description: "Search results retrieved successfully",
     type: PaginatedResponseDto<TransactionResponseDto>,
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async searchTransactions(
     @Query() search: TransactionSearchDto
   ): Promise<PaginatedResponseDto<TransactionResponseDto>> {
