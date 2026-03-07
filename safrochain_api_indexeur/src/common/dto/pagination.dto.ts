@@ -103,6 +103,13 @@ export class PaginationMetaDto {
   })
   hasPrev: boolean;
 
+  @ApiPropertyOptional({
+    description:
+      "Cursor for next page (block height). Use as cursor param for O(1) deep pagination.",
+    example: 12345,
+  })
+  next_cursor?: number;
+
   constructor(page: number, limit: number, total: number) {
     this.page = page;
     this.limit = limit;

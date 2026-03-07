@@ -88,8 +88,15 @@ export class TransactionController {
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of items per page",
+    description: "Number of items per page (1-100, default 20)",
     example: 20,
+    required: false,
+  })
+  @ApiQuery({
+    name: "cursor",
+    description:
+      "Cursor for O(1) deep pagination (block height). Use next_cursor from response.",
+    example: 12345,
     required: false,
   })
   @ApiQuery({
@@ -250,7 +257,7 @@ export class TransactionController {
   @ApiOperation({
     summary: "Advanced transaction filtering",
     description:
-      "Filter transactions with comprehensive parameters including gas, fees, dates, message types, and more.",
+      "Filter transactions with comprehensive parameters including gas, fees, dates, message types, and more. Supports page/limit/offset and cursor-based pagination (limit 1-100).",
   })
   @ApiResponse({
     status: 200,
@@ -321,13 +328,13 @@ export class TransactionController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
     example: 20,
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
     example: 0,
   })
   @ApiResponse({
@@ -372,13 +379,13 @@ export class TransactionController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
     example: 20,
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
     example: 0,
   })
   @ApiResponse({
@@ -428,13 +435,13 @@ export class TransactionController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
     example: 20,
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
     example: 0,
   })
   @ApiResponse({

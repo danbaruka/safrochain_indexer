@@ -122,9 +122,15 @@ export class MessageService {
       filters,
       this.configService
     );
-    queryBuilder.offset(offset).limit(limit);
 
-    const [messages, total] = await queryBuilder.getManyAndCount();
+    const [messages, countRaw] = await Promise.all([
+      queryBuilder.clone().offset(offset).limit(limit).getMany(),
+      queryBuilder
+        .clone()
+        .select("COUNT(*)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
     // Process messages for response
     const processedMessages = messages.map((message) => {
@@ -299,9 +305,15 @@ export class MessageService {
       pagination,
       this.configService
     );
-    queryBuilder.offset(offset).limit(limit);
 
-    const [messages, total] = await queryBuilder.getManyAndCount();
+    const [messages, countRaw] = await Promise.all([
+      queryBuilder.clone().offset(offset).limit(limit).getMany(),
+      queryBuilder
+        .clone()
+        .select("COUNT(*)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
     const processedMessages = messages.map((message) => {
       const parsedMessage = this.messageParserService.parseMessage(
@@ -345,9 +357,15 @@ export class MessageService {
       pagination,
       this.configService
     );
-    queryBuilder.offset(offset).limit(limit);
 
-    const [messages, total] = await queryBuilder.getManyAndCount();
+    const [messages, countRaw] = await Promise.all([
+      queryBuilder.clone().offset(offset).limit(limit).getMany(),
+      queryBuilder
+        .clone()
+        .select("COUNT(*)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
     const processedMessages = messages.map((message) => {
       const parsedMessage = this.messageParserService.parseMessage(
@@ -394,9 +412,14 @@ export class MessageService {
       pagination,
       this.configService
     );
-    queryBuilder.offset(offset).limit(limit);
-
-    const [messages, total] = await queryBuilder.getManyAndCount();
+    const [messages, countRaw] = await Promise.all([
+      queryBuilder.clone().offset(offset).limit(limit).getMany(),
+      queryBuilder
+        .clone()
+        .select("COUNT(*)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
     const processedMessages = messages.map((message) => {
       const parsedMessage = this.messageParserService.parseMessage(

@@ -15,10 +15,10 @@ export default registerAs(
     logging: process.env.NODE_ENV === "development",
     ssl: false,
     extra: {
-      max: 20, // Maximum number of connections in the pool
-      min: 5, // Minimum number of connections in the pool
-      acquire: 30000, // Maximum time to wait for a connection
-      idle: 10000, // Maximum time a connection can be idle
+      max: parseInt(process.env.DB_POOL_MAX || "40", 10),
+      min: parseInt(process.env.DB_POOL_MIN || "5", 10),
+      acquire: 30000,
+      idle: 10000,
     },
   })
 );

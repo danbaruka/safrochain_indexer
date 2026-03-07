@@ -23,6 +23,7 @@ export type PaginationMeta = {
   totalPages: number;
   hasNext: boolean;
   hasPrev: boolean;
+  next_cursor?: number;
 };
 
 const getDefaultLimit = (configService: ConfigService): number =>
@@ -72,15 +73,20 @@ export const normalizeOffsetPagination = (
 export const buildPaginationMeta = (
   page: number,
   limit: number,
-  total: number
+  total: number,
+  nextCursor?: number
 ): PaginationMeta => {
-  const totalPages = Math.ceil(total / limit);
-  return {
+  const totalPages = total >= 0 ? Math.ceil(total / limit) : 0;
+  const meta: PaginationMeta = {
     page,
     limit,
-    total,
+    total: total >= 0 ? total : 0,
     totalPages,
-    hasNext: page < totalPages,
+    hasNext: total >= 0 ? page < totalPages : (nextCursor !== undefined),
     hasPrev: page > 1,
   };
+  if (nextCursor !== undefined) {
+    meta.next_cursor = nextCursor;
+  }
+  return meta;
 };

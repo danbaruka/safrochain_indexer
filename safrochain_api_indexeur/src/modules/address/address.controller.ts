@@ -80,13 +80,13 @@ export class AddressController {
   })
   @ApiQuery({
     name: "page",
-    description: "Page number",
+    description: "Page number (default 1)",
     example: 1,
     required: false,
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of items per page",
+    description: "Number of items per page (1-100, default 20)",
     example: 20,
     required: false,
   })
@@ -475,15 +475,22 @@ export class AddressController {
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of results to return (1-100)",
+    description: "Number of results to return (1-100, default 20)",
     required: false,
     example: 20,
   })
   @ApiQuery({
     name: "offset",
-    description: "Number of results to skip (>=0)",
+    description: "Number of results to skip (>=0, default 0)",
     required: false,
     example: 0,
+  })
+  @ApiQuery({
+    name: "cursor",
+    description:
+      "Cursor for O(1) deep pagination (block height). Use next_cursor from response.",
+    required: false,
+    example: 12345,
   })
   @ApiResponse({
     status: 200,

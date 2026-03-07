@@ -145,11 +145,18 @@ export class ValidatorService {
       );
     }
 
-    // Apply pagination
-    const offset = ((filters.page || 1) - 1) * (filters.limit || 20);
-    queryBuilder.offset(offset).limit(filters.limit || 20);
+    // Apply pagination - run data and count in parallel (limit clamped to 100)
+    const limit = Math.min(Math.max(filters.limit || 20, 1), 100);
+    const offset = ((filters.page || 1) - 1) * limit;
 
-    const [validators, total] = await queryBuilder.getManyAndCount();
+    const [validators, countRaw] = await Promise.all([
+      queryBuilder.clone().offset(offset).limit(limit).getMany(),
+      queryBuilder
+        .clone()
+        .select("COUNT(DISTINCT validator.consensus_address)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
     // Process validators for response
     const processedValidators = validators.map((validator) => ({
@@ -169,10 +176,10 @@ export class ValidatorService {
       data: processedValidators,
       meta: {
         page: filters.page || 1,
-        limit: filters.limit || 20,
+        limit,
         total,
-        totalPages: Math.ceil(total / (filters.limit || 20)),
-        hasNext: (filters.page || 1) < Math.ceil(total / (filters.limit || 20)),
+        totalPages: Math.ceil(total / limit),
+        hasNext: (filters.page || 1) < Math.ceil(total / limit),
         hasPrev: (filters.page || 1) > 1,
       },
     };

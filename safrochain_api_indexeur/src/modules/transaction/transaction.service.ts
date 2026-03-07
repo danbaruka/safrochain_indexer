@@ -168,6 +168,86 @@ export class TransactionService {
       this.configService
     );
 
+    // Cursor-based path: O(1) for deep pages
+    if (filters.cursor) {
+      queryBuilder.andWhere("transaction.height < :cursor", {
+        cursor: filters.cursor,
+      });
+      queryBuilder.limit(limit);
+
+      const transactions = await queryBuilder.getMany();
+      const hasNext = transactions.length === limit;
+      const nextCursor =
+        hasNext && transactions.length > 0
+          ? transactions[transactions.length - 1].height
+          : undefined;
+
+      const hashesNeedingPreload = transactions.filter(
+        (tx) => !tx.messages || tx.messages.length === 0
+      ).map((tx) => tx.hash);
+      const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
+
+      const processedTransactions = await Promise.all(
+        transactions.map(async (transaction) => {
+          let messages: any[] = [];
+          let involvedAddresses = new Set<string>();
+
+          if (transaction.messages && transaction.messages.length > 0) {
+            messages = transaction.messages.map((msg: any, index: number) => ({
+              type: msg["@type"] || msg.type || "unknown",
+              value: msg,
+              index: index,
+              involved_addresses: this.extractAddressesFromMessage(msg),
+            }));
+            messages.forEach((message) => {
+              message.involved_addresses.forEach((addr: string) =>
+                involvedAddresses.add(addr)
+              );
+            });
+          } else {
+            const dbMessages = messageMap.get(transaction.hash) || [];
+            messages = dbMessages.map((message) => ({
+              type: message.type,
+              value: message.value,
+              index: message.index,
+              involved_addresses: message.involved_accounts_addresses,
+            }));
+            dbMessages.forEach((message) => {
+              message.involved_accounts_addresses.forEach((addr) =>
+                involvedAddresses.add(addr)
+              );
+            });
+          }
+
+          return {
+            hash: transaction.hash,
+            height: transaction.height,
+            block_hash: transaction.block?.hash || "",
+            timestamp: transaction.block?.timestamp,
+            success: transaction.success,
+            gas_used: transaction.gas_used,
+            gas_wanted: transaction.gas_wanted,
+            fee: this.calculateTotalFee(transaction.fee),
+            memo: transaction.memo,
+            messages: messages,
+            logs: transaction.logs || [],
+            involved_addresses: Array.from(involvedAddresses),
+            involved_addresses_count: involvedAddresses.size,
+            message_types: [
+              ...new Set(
+                messages.map((msg: any) => msg["@type"] || msg.type || "unknown")
+              ),
+            ],
+          };
+        })
+      );
+
+      return {
+        data: processedTransactions,
+        meta: buildPaginationMeta(1, limit, -1, nextCursor),
+      };
+    }
+
     // Count-only path: when only meta.total is needed (page=1, limit=1)
     const isCountOnly = page === 1 && limit === 1;
     if (isCountOnly) {
@@ -387,6 +467,47 @@ export class TransactionService {
       this.configService
     );
 
+    const useCursor =
+      filters.cursor &&
+      (filters.sort_by === TransactionSortBy.HEIGHT || !filters.sort_by);
+
+    // Cursor-based path: O(1) for deep pages, no count query
+    if (useCursor) {
+      const queryBuilder = this.buildTransactionQuery(filters);
+      queryBuilder.andWhere("transaction.height < :cursor", {
+        cursor: filters.cursor,
+      });
+      const sortField = this.getSortField(
+        filters.sort_by || TransactionSortBy.HEIGHT
+      );
+      queryBuilder
+        .orderBy(sortField, filters.sort_order || TransactionSortOrder.DESC)
+        .limit(limit);
+
+      const transactions = await queryBuilder.getMany();
+      const hasNext = transactions.length === limit;
+      const nextCursor =
+        hasNext && transactions.length > 0
+          ? transactions[transactions.length - 1].height
+          : undefined;
+
+      const hashesNeedingPreload = transactions.filter(
+        (tx) => !tx.messages || tx.messages.length === 0
+      ).map((tx) => tx.hash);
+      const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
+
+      const processedTransactions = await Promise.all(
+        transactions.map((tx) =>
+          this.processTransactionResponse(tx, messageMap)
+        )
+      );
+
+      return {
+        data: processedTransactions,
+        meta: buildPaginationMeta(1, limit, -1, nextCursor),
+      };
+    }
+
     // Count-only path: when only meta.total is needed, run single COUNT query
     const isCountOnly = limit === 1 && offset === 0;
     if (isCountOnly) {
@@ -512,23 +633,32 @@ export class TransactionService {
     const { page, limit: safeLimit, offset: safeOffset } =
       normalizeOffsetPagination({ limit, offset }, this.configService);
 
-    const queryBuilder = this.transactionRepository
-      .createQueryBuilder("transaction")
-      .leftJoinAndSelect("transaction.block", "block")
-      .leftJoin("transaction.messages_entities", "message")
-      .where(
-        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.type = :messageType)"
-      )
-      .setParameter("messageType", messageType)
-      .orderBy("transaction.height", "DESC")
-      .limit(safeLimit)
-      .offset(safeOffset);
+    const baseQb = () =>
+      this.transactionRepository
+        .createQueryBuilder("transaction")
+        .leftJoinAndSelect("transaction.block", "block")
+        .leftJoin("transaction.messages_entities", "message")
+        .where(
+          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND m.type = :messageType)"
+        )
+        .setParameter("messageType", messageType)
+        .orderBy("transaction.height", "DESC");
 
-    const [transactions, total] = await queryBuilder.getManyAndCount();
+    const queryBuilder = baseQb().limit(safeLimit).offset(safeOffset);
 
-    const messageMap = await this.preloadMessagesByHash(
-      transactions.map((tx) => tx.hash)
-    );
+    const [transactions, countRaw] = await Promise.all([
+      queryBuilder.getMany(),
+      baseQb()
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
+
+    const hashesNeedingPreload = transactions.filter(
+      (tx) => !tx.messages || tx.messages.length === 0
+    ).map((tx) => tx.hash);
+    const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
+
     const processedTransactions = await Promise.all(
       transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );
@@ -548,23 +678,32 @@ export class TransactionService {
     const { page, limit: safeLimit, offset: safeOffset } =
       normalizeOffsetPagination({ limit, offset }, this.configService);
 
-    const queryBuilder = this.transactionRepository
-      .createQueryBuilder("transaction")
-      .leftJoinAndSelect("transaction.block", "block")
-      .leftJoin("transaction.messages_entities", "message")
-      .where(
-        "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND :validatorAddress = ANY(m.involved_accounts_addresses))"
-      )
-      .setParameter("validatorAddress", validatorAddress)
-      .orderBy("transaction.height", "DESC")
-      .limit(safeLimit)
-      .offset(safeOffset);
+    const baseQb = () =>
+      this.transactionRepository
+        .createQueryBuilder("transaction")
+        .leftJoinAndSelect("transaction.block", "block")
+        .leftJoin("transaction.messages_entities", "message")
+        .where(
+          "EXISTS (SELECT 1 FROM message m WHERE m.transaction_hash = transaction.hash AND :validatorAddress = ANY(m.involved_accounts_addresses))"
+        )
+        .setParameter("validatorAddress", validatorAddress)
+        .orderBy("transaction.height", "DESC");
 
-    const [transactions, total] = await queryBuilder.getManyAndCount();
+    const queryBuilder = baseQb().limit(safeLimit).offset(safeOffset);
 
-    const messageMap = await this.preloadMessagesByHash(
-      transactions.map((tx) => tx.hash)
-    );
+    const [transactions, countRaw] = await Promise.all([
+      queryBuilder.getMany(),
+      baseQb()
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
+
+    const hashesNeedingPreload = transactions.filter(
+      (tx) => !tx.messages || tx.messages.length === 0
+    ).map((tx) => tx.hash);
+    const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
+
     const processedTransactions = await Promise.all(
       transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );
@@ -585,20 +724,29 @@ export class TransactionService {
     const { page: rangePage, limit: rangeLimit, offset: rangeOffset } =
       normalizeOffsetPagination({ limit, offset }, this.configService);
 
-    const queryBuilder = this.transactionRepository
-      .createQueryBuilder("transaction")
-      .leftJoinAndSelect("transaction.block", "block")
-      .where("transaction.height BETWEEN :minHeight AND :maxHeight")
-      .setParameters({ minHeight, maxHeight })
-      .orderBy("transaction.height", "DESC")
-      .limit(rangeLimit)
-      .offset(rangeOffset);
+    const baseQb = () =>
+      this.transactionRepository
+        .createQueryBuilder("transaction")
+        .leftJoinAndSelect("transaction.block", "block")
+        .where("transaction.height BETWEEN :minHeight AND :maxHeight")
+        .setParameters({ minHeight, maxHeight })
+        .orderBy("transaction.height", "DESC");
 
-    const [transactions, total] = await queryBuilder.getManyAndCount();
+    const queryBuilder = baseQb().limit(rangeLimit).offset(rangeOffset);
 
-    const messageMap = await this.preloadMessagesByHash(
-      transactions.map((tx) => tx.hash)
-    );
+    const [transactions, countRaw] = await Promise.all([
+      queryBuilder.getMany(),
+      baseQb()
+        .select("COUNT(DISTINCT transaction.hash)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
+
+    const hashesNeedingPreload = transactions.filter(
+      (tx) => !tx.messages || tx.messages.length === 0
+    ).map((tx) => tx.hash);
+    const messageMap = await this.preloadMessagesByHash(hashesNeedingPreload);
+
     const processedTransactions = await Promise.all(
       transactions.map((tx) => this.processTransactionResponse(tx, messageMap))
     );

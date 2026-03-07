@@ -80,12 +80,12 @@ export class StakingController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
   })
   @ApiResponse({
     status: 200,
@@ -116,12 +116,12 @@ export class StakingController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
   })
   @ApiResponse({
     status: 200,
@@ -153,12 +153,12 @@ export class StakingController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
   })
   @ApiResponse({
     status: 200,
@@ -189,12 +189,12 @@ export class StakingController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
   })
   @ApiResponse({
     status: 200,
@@ -226,12 +226,12 @@ export class StakingController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
   })
   @ApiResponse({
     status: 200,
@@ -263,12 +263,12 @@ export class StakingController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
   })
   @ApiResponse({
     status: 200,
@@ -299,12 +299,12 @@ export class StakingController {
   @ApiQuery({
     name: "limit",
     required: false,
-    description: "Number of results to return",
+    description: "Number of results (1-100, default 20)",
   })
   @ApiQuery({
     name: "offset",
     required: false,
-    description: "Number of results to skip",
+    description: "Number of results to skip (>=0, default 0)",
   })
   @ApiResponse({
     status: 200,
@@ -354,10 +354,14 @@ export class StakingController {
   }
 
   @Get("validators/signing-info")
-  @ApiOperation({ summary: "Get all validators signing information" })
+  @ApiOperation({
+    summary: "Get all validators signing information",
+    description:
+      "Returns up to 100 most recent validator signing info records. Pagination enforced.",
+  })
   @ApiResponse({
     status: 200,
-    description: "List of validator signing info",
+    description: "List of validator signing info (max 100)",
     type: [ValidatorSigningInfoDto],
   })
   async getAllValidatorSigningInfo(): Promise<ValidatorSigningInfoDto[]> {

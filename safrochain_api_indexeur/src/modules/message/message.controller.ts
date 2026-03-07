@@ -50,7 +50,7 @@ export class MessageController {
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of items per page",
+    description: "Number of items per page (1-100, default 20)",
     example: 20,
     required: false,
   })
@@ -286,6 +286,8 @@ export class MessageController {
     description:
       "Messages retrieved successfully with comprehensive date filtering",
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getMessages(@Query() filters: MessageListDto) {
     return await this.messageService.getMessages(filters);
   }
@@ -380,7 +382,7 @@ export class MessageController {
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of items per page",
+    description: "Number of items per page (1-100, default 20)",
     example: 20,
     required: false,
   })
@@ -388,6 +390,8 @@ export class MessageController {
     status: 200,
     description: "Address messages retrieved successfully",
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getMessagesByAddress(
     @Param("address") address: string,
     @Query() pagination: PaginationDto
@@ -413,7 +417,7 @@ export class MessageController {
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of items per page",
+    description: "Number of items per page (1-100, default 20)",
     example: 20,
     required: false,
   })
@@ -421,6 +425,8 @@ export class MessageController {
     status: 200,
     description: "Type messages retrieved successfully",
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getMessagesByType(
     @Param("type") type: string,
     @Query() pagination: PaginationDto
@@ -448,7 +454,7 @@ export class MessageController {
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of items per page",
+    description: "Number of items per page (1-100, default 20)",
     example: 20,
     required: false,
   })
@@ -456,6 +462,8 @@ export class MessageController {
     status: 200,
     description: "Search results retrieved successfully",
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async searchMessages(
     @Query("q") query: string,
     @Query() pagination: PaginationDto

@@ -213,4 +213,16 @@ export class TransactionListDto {
   })
   @IsOptional()
   success?: boolean;
+
+  @ApiProperty({
+    description:
+      "Cursor for pagination (block height). Use next_cursor from previous response. O(1) for deep pages.",
+    required: false,
+    example: 12345,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cursor?: number;
 }

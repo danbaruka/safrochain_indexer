@@ -1,5 +1,7 @@
 # SQL migrations
 
+## Performance indexes
+
 Run performance indexes (do this before deploying app changes for best effect):
 
 ```bash
@@ -14,3 +16,15 @@ psql -d safrochain_indexdb -U safrochain_indexuser -f migrations/sql/add-indexer
 ```
 
 Indexes use `CONCURRENTLY` so they do not lock writes; each statement runs outside a transaction.
+
+## Redis cache (optional)
+
+To use Redis instead of in-memory cache, set in `.env`:
+
+```
+REDIS_URL=redis://localhost:6379
+# OR
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=          # optional
+```

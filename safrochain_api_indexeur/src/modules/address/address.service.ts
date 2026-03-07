@@ -281,6 +281,7 @@ export class AddressService {
         this.proposalDepositRepository.find({
           where: { depositor_address: address },
           select: ["amount"],
+          take: 100,
         }),
       ]);
 
@@ -414,6 +415,42 @@ export class AddressService {
       filters,
       this.configService
     );
+
+    const useCursor =
+      filters.cursor &&
+      (filters.sort_by === AddressTransactionSortBy.HEIGHT || !filters.sort_by);
+
+    // Cursor-based path: O(1) for deep pages, no count query
+    if (useCursor) {
+      const queryBuilder = this.buildAddressTransactionQuery(address, filters);
+      queryBuilder.andWhere("transaction.height < :cursor", {
+        cursor: filters.cursor,
+      });
+      const sortField = this.getAddressTransactionSortField(
+        filters.sort_by || AddressTransactionSortBy.HEIGHT
+      );
+      queryBuilder
+        .orderBy(sortField, filters.sort_order || AddressTransactionSortOrder.DESC)
+        .limit(limit);
+
+      const transactions = await queryBuilder.getMany();
+      const hasNext = transactions.length === limit;
+      const nextCursor =
+        hasNext && transactions.length > 0
+          ? transactions[transactions.length - 1].height
+          : undefined;
+
+      const processedTransactions = await Promise.all(
+        transactions.map((tx) =>
+          this.processAddressTransactionResponse(tx, address, filters)
+        )
+      );
+
+      return {
+        data: processedTransactions,
+        meta: buildPaginationMeta(1, limit, -1, nextCursor),
+      };
+    }
 
     // Count-only path: when only meta.total is needed (limit=1, offset=0)
     const isCountOnly = limit === 1 && offset === 0;

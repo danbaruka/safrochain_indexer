@@ -5,7 +5,9 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  UseInterceptors,
 } from "@nestjs/common";
+import { CacheInterceptor, CacheTTL } from "@nestjs/cache-manager";
 import {
   ApiTags,
   ApiOperation,
@@ -118,7 +120,7 @@ export class BlockController {
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of items per page",
+    description: "Number of items per page (1-100, default 20)",
     example: 20,
     required: false,
   })
@@ -303,6 +305,8 @@ export class BlockController {
     description:
       "Blocks retrieved successfully with comprehensive date filtering",
   })
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(120)
   async getBlocks(@Query() filters: BlockListDto) {
     return await this.blockService.getBlocks(filters);
   }

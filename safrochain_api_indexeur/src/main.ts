@@ -5,6 +5,9 @@ import { ConfigService } from "@nestjs/config";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const compression = require("compression");
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     // Configure JSON serialization for dates
@@ -13,6 +16,7 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   app.use(helmet());
+  app.use(compression());
 
   // Configure JSON serialization to ensure dates are properly formatted
   app.use((req, res, next) => {
@@ -90,7 +94,13 @@ async function bootstrap() {
 
     const config = new DocumentBuilder()
       .setTitle(swaggerTitle)
-      .setDescription(swaggerDescription)
+      .setDescription(
+        `${swaggerDescription}\n\n` +
+          "## Pagination\n" +
+          "- **page** / **limit** / **offset**: Standard pagination. Limit is clamped to max 100.\n" +
+          "- **cursor**: For O(1) deep pagination, pass block height. Use `next_cursor` from response for next page.\n" +
+          "- All list endpoints enforce pagination; omit params for defaults (page=1, limit=20)."
+      )
       .setVersion(swaggerVersion)
       .addTag("Address", "Address-related operations")
       .addTag("Transaction", "Transaction-related operations")

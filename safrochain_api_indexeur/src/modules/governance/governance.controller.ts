@@ -46,7 +46,7 @@ export class GovernanceController {
   })
   @ApiQuery({
     name: "limit",
-    description: "Number of items per page",
+    description: "Number of items per page (1-100, default 20)",
     example: 20,
     required: false,
   })

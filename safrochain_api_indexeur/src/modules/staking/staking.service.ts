@@ -90,12 +90,16 @@ export class StakingService {
     };
   }
 
+  private static readonly MAX_PAGE_SIZE = 100;
+
   // Delegation APIs
   async getDelegationsByAddress(
     address: string,
     limit: number = 20,
     offset: number = 0
   ): Promise<DelegationDto[]> {
+    const safeLimit = Math.min(Math.max(limit ?? 20, 1), StakingService.MAX_PAGE_SIZE);
+    const safeOffset = Math.max(offset ?? 0, 0);
     const messages = await this.messageRepository
       .createQueryBuilder("message")
       .leftJoinAndSelect("message.transaction", "transaction")
@@ -107,8 +111,8 @@ export class StakingService {
         address,
       })
       .orderBy("message.height", "DESC")
-      .limit(limit)
-      .offset(offset)
+      .limit(safeLimit)
+      .offset(safeOffset)
       .getMany();
 
     return messages.map((message) => {
@@ -136,6 +140,8 @@ export class StakingService {
     limit: number = 20,
     offset: number = 0
   ): Promise<DelegationDto[]> {
+    const safeLimit = Math.min(Math.max(limit ?? 20, 1), StakingService.MAX_PAGE_SIZE);
+    const safeOffset = Math.max(offset ?? 0, 0);
     const messages = await this.messageRepository
       .createQueryBuilder("message")
       .leftJoinAndSelect("message.transaction", "transaction")
@@ -150,8 +156,8 @@ export class StakingService {
         }
       )
       .orderBy("message.height", "DESC")
-      .limit(limit)
-      .offset(offset)
+      .limit(safeLimit)
+      .offset(safeOffset)
       .getMany();
 
     return messages.map((message) => {
@@ -175,6 +181,8 @@ export class StakingService {
     limit: number = 20,
     offset: number = 0
   ): Promise<UndelegationDto[]> {
+    const safeLimit = Math.min(Math.max(limit ?? 20, 1), StakingService.MAX_PAGE_SIZE);
+    const safeOffset = Math.max(offset ?? 0, 0);
     const messages = await this.messageRepository
       .createQueryBuilder("message")
       .leftJoinAndSelect("message.transaction", "transaction")
@@ -186,8 +194,8 @@ export class StakingService {
         address,
       })
       .orderBy("message.height", "DESC")
-      .limit(limit)
-      .offset(offset)
+      .limit(safeLimit)
+      .offset(safeOffset)
       .getMany();
 
     return messages.map((message) => {
@@ -211,6 +219,8 @@ export class StakingService {
     limit: number = 20,
     offset: number = 0
   ): Promise<UndelegationDto[]> {
+    const safeLimit = Math.min(Math.max(limit ?? 20, 1), StakingService.MAX_PAGE_SIZE);
+    const safeOffset = Math.max(offset ?? 0, 0);
     const messages = await this.messageRepository
       .createQueryBuilder("message")
       .leftJoinAndSelect("message.transaction", "transaction")
@@ -225,8 +235,8 @@ export class StakingService {
         }
       )
       .orderBy("message.height", "DESC")
-      .limit(limit)
-      .offset(offset)
+      .limit(safeLimit)
+      .offset(safeOffset)
       .getMany();
 
     return messages.map((message) => {
@@ -251,6 +261,8 @@ export class StakingService {
     limit: number = 20,
     offset: number = 0
   ): Promise<RedelegationDto[]> {
+    const safeLimit = Math.min(Math.max(limit ?? 20, 1), StakingService.MAX_PAGE_SIZE);
+    const safeOffset = Math.max(offset ?? 0, 0);
     const messages = await this.messageRepository
       .createQueryBuilder("message")
       .leftJoinAndSelect("message.transaction", "transaction")
@@ -262,8 +274,8 @@ export class StakingService {
         address,
       })
       .orderBy("message.height", "DESC")
-      .limit(limit)
-      .offset(offset)
+      .limit(safeLimit)
+      .offset(safeOffset)
       .getMany();
 
     return messages.map((message) => {
@@ -289,6 +301,8 @@ export class StakingService {
     limit: number = 20,
     offset: number = 0
   ): Promise<WithdrawalDto[]> {
+    const safeLimit = Math.min(Math.max(limit ?? 20, 1), StakingService.MAX_PAGE_SIZE);
+    const safeOffset = Math.max(offset ?? 0, 0);
     const messages = await this.messageRepository
       .createQueryBuilder("message")
       .leftJoinAndSelect("message.transaction", "transaction")
@@ -300,8 +314,8 @@ export class StakingService {
         address,
       })
       .orderBy("message.height", "DESC")
-      .limit(limit)
-      .offset(offset)
+      .limit(safeLimit)
+      .offset(safeOffset)
       .getMany();
 
     return messages.map((message) => {
@@ -324,6 +338,8 @@ export class StakingService {
     limit: number = 20,
     offset: number = 0
   ): Promise<WithdrawalDto[]> {
+    const safeLimit = Math.min(Math.max(limit ?? 20, 1), StakingService.MAX_PAGE_SIZE);
+    const safeOffset = Math.max(offset ?? 0, 0);
     const messages = await this.messageRepository
       .createQueryBuilder("message")
       .leftJoinAndSelect("message.transaction", "transaction")
@@ -338,8 +354,8 @@ export class StakingService {
         }
       )
       .orderBy("message.height", "DESC")
-      .limit(limit)
-      .offset(offset)
+      .limit(safeLimit)
+      .offset(safeOffset)
       .getMany();
 
     return messages.map((message) => {
@@ -383,6 +399,7 @@ export class StakingService {
   async getAllValidatorSigningInfo(): Promise<ValidatorSigningInfoDto[]> {
     const signingInfos = await this.validatorSigningInfoRepository.find({
       order: { height: "DESC" },
+      take: 100,
     });
 
     return signingInfos.map((info) => ({

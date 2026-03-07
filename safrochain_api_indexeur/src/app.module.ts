@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { APP_GUARD } from "@nestjs/core";
 import { CacheModule } from "@nestjs/cache-manager";
+import { redisStore } from "cache-manager-redis-yet";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AddressModule } from "./modules/address/address.module";
 import { TransactionModule } from "./modules/transaction/transaction.module";
@@ -63,9 +64,27 @@ import { Genesis } from "./entities/genesis.entity";
       isGlobal: true,
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        ttl: (configService.get<number>("app.cacheTtl") ?? 60) * 1000,
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const redisUrl = configService.get<string>("app.redisUrl");
+        const redisHost = configService.get<string>("app.redisHost");
+        const redisPort = configService.get<number>("app.redisPort");
+        const redisPassword = configService.get<string>("app.redisPassword");
+        const ttl = (configService.get<number>("app.cacheTtl") ?? 60) * 1000;
+
+        if (redisUrl) {
+          const store = await redisStore({ url: redisUrl, ttl });
+          return { store, ttl };
+        }
+        if (redisHost) {
+          const store = await redisStore({
+            socket: { host: redisHost, port: redisPort },
+            password: redisPassword,
+            ttl,
+          });
+          return { store, ttl };
+        }
+        return { ttl };
+      },
     }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
@@ -125,11 +144,11 @@ import { Genesis } from "./entities/genesis.entity";
         synchronize: false, // Never set to true in production
         logging: configService.get("app.environment") === "development",
         ssl: false,
-        extra: {
-          max: 20, // Maximum number of connections in the pool
-          min: 5, // Minimum number of connections in the pool
-          acquire: 30000, // Maximum time to wait for a connection
-          idle: 10000, // Maximum time a connection can be idle
+        extra: configService.get("database.extra") ?? {
+          max: 40,
+          min: 5,
+          acquire: 30000,
+          idle: 10000,
         },
       }),
       inject: [ConfigService],

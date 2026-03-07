@@ -255,6 +255,18 @@ export class AddressTransactionFilterDto {
   offset?: number = 0;
 
   @ApiProperty({
+    description:
+      "Cursor for pagination (block height). Use next_cursor from previous response. O(1) for deep pages.",
+    required: false,
+    example: 12345,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Type(() => Number)
+  cursor?: number;
+
+  @ApiProperty({
     description: "Sort by field",
     required: false,
     enum: AddressTransactionSortBy,

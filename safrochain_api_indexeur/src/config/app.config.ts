@@ -15,4 +15,8 @@ export default registerAs("app", () => ({
   rateLimitTtl: parseInt(process.env.RATE_LIMIT_TTL, 10) || 60,
   rateLimitLimit: parseInt(process.env.RATE_LIMIT_LIMIT, 10) || 120,
   cacheTtl: parseInt(process.env.CACHE_TTL, 10) || 60,
+  redisUrl: process.env.REDIS_URL || "",
+  redisHost: process.env.REDIS_HOST || "",
+  redisPort: parseInt(process.env.REDIS_PORT, 10) || 6379,
+  redisPassword: process.env.REDIS_PASSWORD || undefined,
 }));

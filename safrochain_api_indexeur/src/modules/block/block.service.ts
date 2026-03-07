@@ -126,11 +126,18 @@ export class BlockService {
       "block.timestamp"
     );
 
-    // Apply pagination
-    const offset = ((filters.page || 1) - 1) * (filters.limit || 20);
-    queryBuilder.offset(offset).limit(filters.limit || 20);
+    // Apply pagination - run data and count in parallel (limit clamped to 100)
+    const limit = Math.min(Math.max(filters.limit || 20, 1), 100);
+    const offset = ((filters.page || 1) - 1) * limit;
 
-    const [blocks, total] = await queryBuilder.getManyAndCount();
+    const [blocks, countRaw] = await Promise.all([
+      queryBuilder.clone().offset(offset).limit(limit).getMany(),
+      queryBuilder
+        .clone()
+        .select("COUNT(*)", "count")
+        .getRawOne<{ count: string }>(),
+    ]);
+    const total = parseInt(countRaw?.count ?? "0", 10);
 
     // Process blocks for response
     const processedBlocks = blocks.map((block) => ({
@@ -153,10 +160,10 @@ export class BlockService {
       data: processedBlocks,
       meta: {
         page: filters.page || 1,
-        limit: filters.limit || 20,
+        limit,
         total,
-        totalPages: Math.ceil(total / (filters.limit || 20)),
-        hasNext: (filters.page || 1) < Math.ceil(total / (filters.limit || 20)),
+        totalPages: Math.ceil(total / limit),
+        hasNext: (filters.page || 1) < Math.ceil(total / limit),
         hasPrev: (filters.page || 1) > 1,
       },
     };
@@ -165,6 +172,7 @@ export class BlockService {
   private async getBlockStatistics(height: number) {
     const transactions = await this.transactionRepository.find({
       where: { height },
+      take: 1000,
     });
 
     const totalFees = transactions.reduce((acc, tx) => {
