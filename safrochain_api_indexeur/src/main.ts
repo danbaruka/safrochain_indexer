@@ -155,19 +155,15 @@ async function bootstrap() {
       .addTag("Genesis", "Genesis-related operations");
 
     const appUrl = configService.get<string>("app.url");
-    let configBuilder = config;
+    const port = configService.get("app.port");
+    // When APP_URL is set (production), use only that server so Swagger "Try it out" hits the right host
     if (appUrl) {
-      configBuilder = configBuilder.addServer(
-        appUrl.replace(/\/$/, ""),
-        "Production server"
-      );
+      config.addServer(appUrl.replace(/\/$/, ""), "Production");
+    } else {
+      config.addServer(`http://localhost:${port}`, "Development");
     }
-    configBuilder = configBuilder.addServer(
-      `http://localhost:${configService.get("app.port")}`,
-      "Development server"
-    );
 
-    const document = SwaggerModule.createDocument(app, configBuilder.build());
+    const document = SwaggerModule.createDocument(app, config.build());
     SwaggerModule.setup(swaggerPath, app, document, {
       swaggerOptions: {
         persistAuthorization: true,
