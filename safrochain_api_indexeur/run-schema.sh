@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Run Callisto database schema SQL files using DB config from .env
-# Usage: ./run-schema.sh   (from safrochain_api_indexeur directory)
+# Usage: ./run-schema.sh [--ignore-existing]
+#   --ignore-existing  Continue on "already exists" errors (idempotent for existing DBs)
 
 set -e
+
+IGNORE_EXISTING=false
+[[ "${1:-}" == "--ignore-existing" ]] && IGNORE_EXISTING=true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCHEMA_DIR="${SCRIPT_DIR}/../callisto/database/schema"
@@ -39,13 +43,18 @@ export PGPASSWORD="$DB_PASSWORD"
 
 echo "Using database: $DB_NAME @ $DB_HOST:$DB_PORT (user: $DB_USER)"
 echo "Running schema from: $SCHEMA_DIR"
+[[ "$IGNORE_EXISTING" == true ]] && echo "(--ignore-existing: will continue on 'already exists' errors)"
 echo "---"
 
 for file in "$SCHEMA_DIR"/*.sql; do
   if [[ -f "$file" ]]; then
     name="$(basename "$file")"
     echo "Running $name..."
-    psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$file" || exit 1
+    if [[ "$IGNORE_EXISTING" == true ]]; then
+      psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=0 -f "$file" || true
+    else
+      psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$file" || exit 1
+    fi
   fi
 done
 

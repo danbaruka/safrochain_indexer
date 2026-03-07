@@ -1,5 +1,19 @@
 # SQL migrations
 
+## Schema (initial setup)
+
+The Callisto indexer creates tables. To run schema manually:
+
+```bash
+./run-schema.sh
+```
+
+If the DB already has tables, use `--ignore-existing` to avoid errors:
+
+```bash
+./run-schema.sh --ignore-existing
+```
+
 ## Performance indexes
 
 Run performance indexes (do this before deploying app changes for best effect):
