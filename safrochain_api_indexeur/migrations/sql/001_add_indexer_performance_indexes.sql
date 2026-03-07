@@ -1,5 +1,4 @@
 -- Performance indexes for indexer (list, filter, search, address transactions).
--- Run manually: psql -d your_db -f migrations/sql/add-indexer-performance-indexes.sql
 -- Idempotent: IF NOT EXISTS used where supported (PostgreSQL 9.5+).
 --
 -- Note: transaction and message are partitioned tables. PostgreSQL does not support

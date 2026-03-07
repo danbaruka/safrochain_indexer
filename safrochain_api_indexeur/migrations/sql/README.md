@@ -1,35 +1,57 @@
-# SQL migrations
+# SQL Migrations
 
-## Schema (initial setup)
+## Overview
 
-The Callisto indexer creates tables. To run schema manually:
+- **Schema** (tables): Created by Callisto indexer. Run `./run-schema.sh` for initial setup.
+- **Migrations** (indexes, etc.): Tracked migrations. Run `./run-migrations.sh`.
+
+## 1. Schema (initial setup)
+
+Creates tables from Callisto schema. Run once on a fresh database:
 
 ```bash
 ./run-schema.sh
 ```
 
-If the DB already has tables, use `--ignore-existing` to avoid errors:
+If the DB already has tables (e.g. Callisto ran first):
 
 ```bash
 ./run-schema.sh --ignore-existing
 ```
 
-## Performance indexes
+## 2. Migrations (indexes, schema changes)
 
-Run performance indexes (do this before deploying app changes for best effect):
-
-```bash
-psql -h "$DB_HOST" -p "$DB_PORT" -d "$DB_NAME" -U "$DB_USER" -f migrations/sql/add-indexer-performance-indexes.sql
-```
-
-Or with explicit values:
+Run migrations with tracking. Safe to run multiple times; applied migrations are skipped.
 
 ```bash
-cd safrochain_indexer/safrochain_api_indexeur
-psql -h localhost -p 5432 -d safrochain_indexdb -U safrochain_indexuser -f migrations/sql/add-indexer-performance-indexes.sql
+./run-migrations.sh
 ```
 
-**Note:** `transaction` and `message` are partitioned tables; PostgreSQL does not support `CONCURRENTLY` on them, so those indexes use plain `CREATE INDEX` (may briefly lock writes). `block` indexes use `CONCURRENTLY`. Run during low traffic if possible.
+Migrations are in `migrations/sql/` with numeric prefix (`001_`, `002_`, ...). Applied migrations are recorded in `schema_migrations` table.
+
+### Adding a new migration
+
+1. Create `migrations/sql/NNN_description.sql` (e.g. `002_add_foo_index.sql`)
+2. Use `IF NOT EXISTS` where possible for idempotency
+3. For partitioned tables (`transaction`, `message`): do **not** use `CONCURRENTLY` (PostgreSQL limitation)
+4. For non-partitioned tables: use `CREATE INDEX CONCURRENTLY` to avoid write locks
+
+## Deploy flow
+
+```bash
+# 1. Pull latest code
+git pull origin main
+
+# 2. Install deps
+npm ci
+
+# 3. Run migrations (idempotent)
+./run-migrations.sh
+
+# 4. Build and start
+npm run build
+npm run start:prod
+```
 
 ## Redis cache (optional)
 
@@ -40,5 +62,5 @@ REDIS_URL=redis://localhost:6379
 # OR
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_PASSWORD=          # optional
+REDIS_PASSWORD=
 ```
