@@ -15,8 +15,25 @@ async function bootstrap() {
   });
   const configService = app.get(ConfigService);
 
-  app.use(helmet());
-  app.use(compression());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          imgSrc: ["'self'", "data:", "https:"],
+          connectSrc: ["'self'"],
+        },
+      },
+    })
+  );
+  app.use(
+    compression({
+      filter: (req, res) => !req.path?.startsWith("/docs"),
+    })
+  );
 
   // Configure JSON serialization to ensure dates are properly formatted
   app.use((req, res, next) => {
@@ -159,6 +176,11 @@ async function bootstrap() {
         .swagger-ui .info .title { color: #3b82f6; }
         .swagger-ui .scheme-container { background: #f8fafc; padding: 10px; border-radius: 4px; }
       `,
+      customCssUrl: "https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css",
+      customJs: [
+        "https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js",
+        "https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-standalone-preset.js",
+      ],
     });
   }
 
